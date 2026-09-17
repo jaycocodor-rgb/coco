@@ -1,0 +1,878 @@
+<title>인사 CFO 사령탑</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="data.js"></script>
+<style>
+  :root{
+    --bg:#F2F1EC; --surface:#FFFFFF; --surface-alt:#E9E7E0; --border:#D9D6CC; --border-2:#C6C2B5;
+    --ink:#1F1D1A; --ink-2:#58544D; --ink-3:#8B867C;
+    --accent:#2E4374; --accent-soft:#E3E7F1; --accent-2:#5A6EA0;
+    --good:#2E7D4F; --good-soft:#E3F1E8; --warn:#B8802A; --warn-soft:#F7EDDB; --crit:#B23B3B; --crit-soft:#F8E4E2;
+    --fn-prod:#3F6C8F; --fn-sales:#8A5A3B; --fn-rnd:#4F7A63; --fn-admin:#6B5B8A;
+    --shadow:0 1px 2px rgba(31,29,26,.05),0 4px 14px rgba(31,29,26,.05);
+    --radius:11px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#16171A; --surface:#1E2025; --surface-alt:#262930; --border:#383C45; --border-2:#4A4F5A;
+      --ink:#E9EAEC; --ink-2:#A9AEB8; --ink-3:#787E89;
+      --accent:#8FA6DC; --accent-soft:#232A3A; --accent-2:#6C82BC;
+      --good:#5CB884; --good-soft:#1B2E23; --warn:#DCA74E; --warn-soft:#332916; --crit:#E0817A; --crit-soft:#3A2321;
+      --fn-prod:#79A6C9; --fn-sales:#C3906A; --fn-rnd:#83B79C; --fn-admin:#A292C4;
+      --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16171A; --surface:#1E2025; --surface-alt:#262930; --border:#383C45; --border-2:#4A4F5A;
+    --ink:#E9EAEC; --ink-2:#A9AEB8; --ink-3:#787E89;
+    --accent:#8FA6DC; --accent-soft:#232A3A; --accent-2:#6C82BC;
+    --good:#5CB884; --good-soft:#1B2E23; --warn:#DCA74E; --warn-soft:#332916; --crit:#E0817A; --crit-soft:#3A2321;
+    --fn-prod:#79A6C9; --fn-sales:#C3906A; --fn-rnd:#83B79C; --fn-admin:#A292C4;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
+  body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+       font-size:13.5px;line-height:1.55;display:grid;grid-template-columns:238px 1fr;min-height:100vh;}
+  h1,h2,h3{font-family:'Gowun Batang','Noto Serif KR',serif;text-wrap:balance;margin:0;}
+  .num{font-family:'IBM Plex Mono','IBM Plex Sans KR',monospace;font-variant-numeric:tabular-nums;}
+
+  /* ---- sidebar ---- */
+  #sidebar{background:var(--surface-alt);border-right:1px solid var(--border);padding:14px 11px 26px;
+           position:sticky;top:env(safe-area-inset-top,0px);height:100vh;overflow-y:auto;}
+  .brand{padding:2px 6px 11px;border-bottom:1px solid var(--border-2);margin-bottom:10px;}
+  .brand h1{font-size:16.5px;font-weight:700;letter-spacing:-.01em;}
+  .brand p{margin:4px 0 0;font-size:10.5px;color:var(--ink-2);line-height:1.45;}
+  .brand .stamp{display:inline-block;margin-top:7px;font-size:10px;padding:2px 8px;border-radius:3px;
+                background:var(--accent);color:#fff;font-weight:600;letter-spacing:.02em;}
+  .nav-item{display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;background:none;border:none;
+            padding:6px 8px;border-radius:7px;color:var(--ink-2);font-size:12.4px;font-family:inherit;cursor:pointer;line-height:1.35;}
+  .nav-item .idx{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);flex:0 0 17px;padding-top:1px;}
+  .nav-item:hover{background:var(--surface);color:var(--ink);}
+  .nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .nav-item.active .idx{color:var(--accent);}
+  .nav-item:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .nav-sep{font-size:10px;letter-spacing:.06em;color:var(--ink-3);padding:12px 8px 4px;font-weight:600;
+           border-top:1px dashed var(--border-2);margin-top:8px;}
+  .nav-sep:first-of-type{border-top:none;margin-top:2px;}
+
+  /* ---- main ---- */
+  #main{padding:16px 22px 44px;min-width:0;}
+  .view-head{margin-bottom:12px;}
+  .view-title{font-size:20px;font-weight:700;letter-spacing:-.01em;}
+  .view-sub{font-size:12px;color:var(--ink-2);margin-top:3px;max-width:78ch;}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;padding:3px 9px;border-radius:999px;
+       font-weight:600;letter-spacing:.01em;}
+  .tag.real{background:var(--good-soft);color:var(--good);}
+  .tag.part{background:var(--warn-soft);color:var(--warn);}
+  .tag.plan{background:var(--accent-soft);color:var(--accent);}
+
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:9px;margin-bottom:14px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 13px;box-shadow:var(--shadow);}
+  .kpi .label{font-size:10.5px;color:var(--ink-3);}
+  .kpi .value{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;font-size:17px;font-weight:500;margin-top:3px;letter-spacing:-.02em;}
+  .kpi .foot{font-size:10.5px;color:var(--ink-2);margin-top:3px;}
+  .kpi.lead{border-color:var(--accent);}
+  .kpi.bad{border-color:var(--crit);} .kpi.bad .value{color:var(--crit);}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);
+         padding:13px 15px 6px;margin-bottom:14px;}
+  .panel.flat{padding-bottom:14px;}
+  .panel-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:9px;flex-wrap:wrap;}
+  .panel-head h2{font-size:15.5px;font-weight:700;padding-left:10px;border-left:3px solid var(--accent);}
+  .panel-note{font-size:11px;color:var(--ink-3);max-width:70ch;}
+
+  .table-scroll{overflow-x:auto;border-top:1px solid var(--border);}
+  table.dt{width:auto;min-width:100%;border-collapse:collapse;font-size:12.4px;white-space:nowrap;}
+  table.dt td:last-child,table.dt th:last-child{width:99%;}
+  table.dt thead th{position:sticky;top:0;background:var(--surface);text-align:left;padding:8px 11px;font-size:10.5px;
+                    color:var(--ink-3);font-weight:600;border-bottom:1px solid var(--border-2);z-index:1;}
+  table.dt thead th.num{text-align:right;}
+  table.dt td{padding:6px 11px;border-bottom:1px solid var(--border);}
+  table.dt td.num{text-align:right;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+  table.dt tbody tr:hover{background:var(--surface-alt);}
+  table.dt tbody tr:last-child td{border-bottom:none;}
+  table.dt td.strong,table.dt th.strong{background:var(--surface-alt);font-weight:700;}
+  table.dt tr.total-row td{background:var(--surface-alt);font-weight:700;border-top:2px solid var(--border-2);}
+  .rank{color:var(--ink-3);font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .pos{color:var(--good);} .neg{color:var(--crit);} .muted{color:var(--ink-3);}
+
+  .sev{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:4px;}
+  .sev.치명{background:var(--crit-soft);color:var(--crit);}
+  .sev.주의{background:var(--warn-soft);color:var(--warn);}
+  .sev.참고{background:var(--accent-soft);color:var(--accent);}
+  tr.stripe-치명 td:first-child{box-shadow:inset 3px 0 0 var(--crit);}
+  tr.stripe-주의 td:first-child{box-shadow:inset 3px 0 0 var(--warn);}
+  tr.stripe-참고 td:first-child{box-shadow:inset 3px 0 0 var(--accent-2);}
+
+  .bar{height:7px;border-radius:3px;background:var(--surface-alt);overflow:hidden;min-width:56px;}
+  .bar > i{display:block;height:100%;background:var(--accent);}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto;}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:11px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow);}
+  .card h3{font-size:14.5px;margin-bottom:6px;}
+  .card .eyebrow{font-size:10px;letter-spacing:.06em;color:var(--ink-3);font-weight:600;margin-bottom:4px;}
+  .card p{margin:5px 0;font-size:12.3px;color:var(--ink-2);}
+  .card .metric{font-family:'IBM Plex Mono',monospace;font-size:15px;color:var(--ink);font-weight:500;}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.2px;margin-top:8px;}
+  .kv dt{color:var(--ink-3);} .kv dd{margin:0;}
+
+  .searchbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px;}
+  .searchbar input,.searchbar select{font-family:inherit;font-size:12.5px;padding:7px 10px;border:1px solid var(--border-2);
+        border-radius:7px;background:var(--surface);color:var(--ink);}
+  .searchbar input{flex:1 1 200px;min-width:0;}
+  .searchbar input:focus-visible,.searchbar select:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .person-list{max-height:330px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;}
+  .person-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 11px;border-bottom:1px solid var(--border);
+        cursor:pointer;font-size:12.4px;background:none;border-left:none;border-right:none;border-top:none;width:100%;
+        text-align:left;font-family:inherit;color:var(--ink);}
+  .person-row:hover{background:var(--surface-alt);}
+  .person-row[aria-selected="true"]{background:var(--accent-soft);}
+  .person-row .sub{font-size:10.5px;color:var(--ink-3);}
+  .slip{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;}
+  .slip section{border:1px solid var(--border);border-radius:9px;overflow:hidden;}
+  .slip h4{margin:0;padding:7px 11px;font-size:11.5px;background:var(--surface-alt);font-weight:700;
+           font-family:'IBM Plex Sans KR',sans-serif;letter-spacing:.02em;}
+  .slip .line{display:flex;justify-content:space-between;gap:10px;padding:4px 11px;font-size:12.2px;border-top:1px solid var(--border);}
+  .slip .line span:last-child{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+  .slip .line.tot{background:var(--surface-alt);font-weight:700;}
+
+  .steps{counter-reset:s;display:grid;gap:9px;}
+  .step{display:grid;grid-template-columns:30px 1fr;gap:11px;background:var(--surface);border:1px solid var(--border);
+        border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);}
+  .step .qn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--accent);font-weight:600;
+            border-right:1px solid var(--border);padding-right:8px;}
+  .step h3{font-size:14px;margin-bottom:3px;}
+  .step p{margin:4px 0 0;font-size:12.3px;color:var(--ink-2);}
+
+  .foot-note{font-size:11px;color:var(--ink-3);padding:7px 2px 9px;max-width:88ch;line-height:1.5;}
+  .view{display:none;} .view.active{display:block;}
+  .legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--ink-2);margin-bottom:8px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:30px;}
+  .spark i{flex:1;background:var(--accent-2);border-radius:1px 1px 0 0;min-height:1px;}
+  .spark i.hi{background:var(--crit);}
+
+  @media (max-width:900px){
+    body{grid-template-columns:1fr;}
+    #sidebar{position:relative;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border);}
+    #main{padding:14px 16px 40px;}
+  }
+</style>
+
+<div id="sidebar">
+  <div class="brand">
+    <h1>인사 CFO 사령탑</h1>
+    <p>코코도르 · 코코도르팜 전사 인건비 진단<br>기준월 2026-02 · 154명 실측</p>
+    <span class="stamp">실측 급여대장 기반</span>
+  </div>
+  <nav id="nav"></nav>
+</div>
+
+<div id="main"><div id="content"></div></div>
+
+<script>
+(function(){
+  "use strict";
+  var D = window.HR_DATA;
+
+  /* ---------- formatters ---------- */
+  function won(n){ if(n===null||n===undefined||isNaN(n)) return '-';
+    var s=n<0?'-':''; return s+Math.round(Math.abs(n)).toLocaleString('ko-KR')+'원'; }
+  function man(n){ if(n===null||n===undefined||isNaN(n)) return '-';
+    var s=n<0?'-':''; n=Math.abs(n);
+    if(n>=100000000) return s+(n/100000000).toFixed(2)+'억원';
+    if(n>=10000) return s+Math.round(n/10000).toLocaleString('ko-KR')+'만원';
+    return s+Math.round(n).toLocaleString('ko-KR')+'원'; }
+  function eok(n){ return (n===null||n===undefined||isNaN(n))?'-':((n<0?'-':'')+(Math.abs(n)/100000000).toFixed(2)+'억원'); }
+  function pct(n,d){ return (n===null||n===undefined||isNaN(n))?'-':(n*100).toFixed(d===undefined?1:d)+'%'; }
+  function cnt(n){ return (n===null||n===undefined||isNaN(n))?'-':Math.round(n).toLocaleString('ko-KR'); }
+  function esc(s){ return String(s===null||s===undefined?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function sign(n,f){ if(n===null||n===undefined||isNaN(n)) return '-';
+    return '<b class="'+(n>=0?'pos':'neg')+'">'+(n>0?'+':'')+(f||won)(n)+'</b>'; }
+
+  var FN_COLOR={'생산·물류':'var(--fn-prod)','영업·마케팅':'var(--fn-sales)','상품·연구개발':'var(--fn-rnd)','경영지원':'var(--fn-admin)','기타':'var(--ink-3)'};
+  var FUNC={'생산·물류':['음성생산','용인생산','온라인물류','온라인물류*','본사물류','음성물류','포장','음성관리','원예운영','고성'],
+            '영업·마케팅':['전략영업팀','해외온라인','온라인영업','영업관리','국내B2B','해외B2B','쿠팡그룹','마케팅그룹','CX'],
+            '상품·연구개발':['상품그룹','디자인연구소','디자인그룹','오일연구소','품질','기획'],
+            '경영지원':['재무/인사','총무','구매','임원','미지정']};
+  var FMAP={}; Object.keys(FUNC).forEach(function(f){ FUNC[f].forEach(function(d){ FMAP[d]=f; }); });
+  function fnOf(d){ return FMAP[d]||'기타'; }
+  function fnDot(d){ return '<span class="dot" style="background:'+FN_COLOR[fnOf(d)]+'"></span>'; }
+
+  function table(cols, rows, maxH, rowCls){
+    var h='<div class="table-scroll"'+(maxH?' style="max-height:'+maxH+';overflow-y:auto"':'')+'><table class="dt"><thead><tr>';
+    cols.forEach(function(c){ h+='<th class="'+[(c.num?'num':''),(c.cls||'')].join(' ').trim()+'">'+c.label+'</th>'; });
+    h+='</tr></thead><tbody>';
+    rows.forEach(function(r,i){
+      var rc=rowCls?(rowCls(r,i)||''):'';
+      h+='<tr'+(rc?' class="'+rc+'"':'')+'>';
+      cols.forEach(function(c){ h+='<td class="'+[(c.num?'num':''),(c.cls||'')].join(' ').trim()+'">'+c.render(r,i)+'</td>'; });
+      h+='</tr>';
+    });
+    return h+'</tbody></table></div>';
+  }
+  function bar(v,max){ var w=max>0?Math.max(1,Math.round(v/max*100)):0;
+    return '<span class="bar"><i style="width:'+w+'%"></i></span>'; }
+  function head(t,s,tag){ return '<div class="view-head"><div class="view-title">'+t+
+    (tag?' <span class="tag '+tag[0]+'">'+tag[1]+'</span>':'')+'</div><div class="view-sub">'+s+'</div></div>'; }
+  function kpi(label,val,foot,cls){ return '<div class="kpi'+(cls?' '+cls:'')+'"><div class="label">'+label+
+    '</div><div class="value">'+val+'</div>'+(foot?'<div class="foot">'+foot+'</div>':'')+'</div>'; }
+  function panel(title,note,body,flat){ return '<div class="panel'+(flat?' flat':'')+'"><div class="panel-head"><h2>'+title+'</h2>'+
+    (note?'<div class="panel-note">'+note+'</div>':'')+'</div>'+body+'</div>'; }
+
+  var TOT = D.costBase.월인건비, HC = D.headcount.전체;
+
+  /* =================== 0. 요약 =================== */
+  function v0(){
+    var crit=D.issues.filter(function(i){return i.심각도==='치명';}).length;
+    var warn=D.issues.filter(function(i){return i.심각도==='주의';}).length;
+    var ot=D.costBase.연장수당총계;
+    var h=head('인사 CFO 요약','2026년 2월 급여대장 실측 154명 기준. 아래 11개 메뉴의 핵심 결론만 모았습니다.',['real','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('월 인건비 (2026-02)',eok(TOT),'연환산 '+eok(D.costBase.연환산),'lead')+
+      kpi('재직 인원',cnt(HC)+'명','코코도르 '+D.headcount.코코도르+' · 코팜 '+D.headcount.코코도르팜)+
+      kpi('1인 평균 월급여',man(D.talentFacts['1인평균']),'평균 근속 '+D.talentFacts.평균근속+'년')+
+      kpi('연장수당 비중',pct(ot/TOT),'월 '+man(ot)+' (고정+실적)')+
+      kpi('검증 미스',D.issues.length+'건','치명 '+crit+' · 주의 '+warn+' · 참고 '+(D.issues.length-crit-warn),'bad')+
+      kpi('절감 가능액(연)',eok(D.savingsTotal),'6개 과제 합산 추정')+
+      '</div>';
+
+    h+='<div class="cards">';
+    [['진단 1','인건비의 22%가 연장수당이다',
+      '고정연장수당이 월 '+man(D.costBase.고정연장수당)+'(총액의 '+pct(D.costBase.고정연장수당/TOT)+')으로 '+
+      D.allowances.filter(function(a){return a.항목==='고정연장수당';})[0].수령인원+'명에게 지급됩니다. 실적연장·휴일특근 '+
+      man(D.costBase.실적연장수당)+'를 더하면 월 '+man(ot)+'. 기본급 외 최대 비용 항목이며, 절감 여지가 가장 큰 영역입니다.'],
+     ['진단 2','인원의 56%가 근속 3년 미만',
+      '근속 1년 미만이 '+D.talentFacts.근속1년미만+'명('+pct(D.talentFacts.근속1년미만/HC)+'), 3년 미만이 '+
+      D.talentFacts.근속3년미만+'명('+pct(D.talentFacts.근속3년미만/HC)+')입니다. 10년 이상은 '+D.talentFacts.근속10년이상+
+      '명뿐입니다. 조기이직이 상시화되면 채용·교육비가 고정비처럼 누적됩니다.'],
+     ['진단 3','4대보험 미가입 1건은 즉시 조치 대상',
+      D.issues.filter(function(i){return i.검증항목.indexOf('R7')===0;}).map(function(i){return i.대상+'('+i.소속+')';}).join(', ')+
+      ' — 최저임금을 넘는 급여를 받으면서 국민연금·건강보험이 모두 0원입니다. 취득신고 누락이면 소급보험료와 과태료가 발생합니다.'],
+     ['진단 4','식대 비과세 한도가 놀고 있다',
+      '154명 전원의 식대가 0원입니다. 월 20만원까지 비과세인 식대를 활용하지 않아, 같은 인건비로도 직원 실수령액을 올릴 기회를 놓치고 있습니다. 복리후생 강화의 1순위 카드입니다.']
+    ].forEach(function(c){
+      h+='<div class="card"><div class="eyebrow">'+c[0]+'</div><h3>'+c[1]+'</h3><p>'+c[2]+'</p></div>';
+    });
+    h+='</div>';
+
+    var fnMax=Math.max.apply(null,D.byFunction.map(function(f){return f.인건비;}));
+    h+=panel('기능별 인건비 배분','생산·물류에 인원의 '+pct(D.byFunction.filter(function(f){return f.기능==='생산·물류';})[0].인원비중)+'가 집중되어 있습니다.',
+      table([
+        {label:'기능',render:function(r){return '<span style="display:inline-flex;align-items:center;gap:6px"><span class="dot" style="background:'+FN_COLOR[r.기능]+'"></span>'+esc(r.기능)+'</span>';}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'인원비중',num:true,render:function(r){return pct(r.인원비중);}},
+        {label:'월 인건비',num:true,render:function(r){return won(r.인건비);}},
+        {label:'인건비비중',num:true,render:function(r){return pct(r.인건비비중);}},
+        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+        {label:'',render:function(r){return bar(r.인건비,fnMax);}}
+      ], D.byFunction));
+    return h;
+  }
+
+  /* =================== 1. 부서별 인건비 =================== */
+  function v1(){
+    var rows=D.byDept, max=Math.max.apply(null,rows.map(function(r){return r.지급총액;}));
+    var h=head('1. 부서별 인건비 현황','2026년 2월 급여대장 기준 '+rows.length+'개 부서. 계약급여(기본급·고정연장·직책수당)와 변동급여(실적연장·휴일특근·상여·출장비 등)를 분리해 표시합니다.',['real','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('부서 수',rows.length+'개','소속 미지정 '+ (rows.filter(function(r){return r.소속==='미지정';})[0]||{인원:0}).인원 +'명 포함')+
+      kpi('최대 부서',esc(rows[0].소속),rows[0].인원+'명 · '+man(rows[0].지급총액))+
+      kpi('1인평균 최고',esc(rows.slice().sort(function(a,b){return b['1인평균']-a['1인평균'];})[0].소속),
+          man(rows.slice().sort(function(a,b){return b['1인평균']-a['1인평균'];})[0]['1인평균']))+
+      kpi('변동급여 총액',man(rows.reduce(function(a,r){return a+r.변동급여;},0)),'전사 변동비 비중 '+pct(rows.reduce(function(a,r){return a+r.변동급여;},0)/TOT))+
+      '</div>';
+    h+='<div class="legend">'+Object.keys(FN_COLOR).map(function(k){
+      return '<span><span class="dot" style="background:'+FN_COLOR[k]+'"></span>'+k+'</span>';}).join('')+'</div>';
+
+    h+=panel('부서별 인건비 · 인원 · 1인평균','연장비중 = (고정연장+실적연장+휴일특근+야간수당) ÷ 지급총액. 30%를 넘으면 상시 연장근로 구조를 의심해야 합니다.',
+      table([
+        {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+        {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'지급총액',num:true,render:function(r){return won(r.지급총액);}},
+        {label:'비중',num:true,render:function(r){return pct(r.지급총액/TOT);}},
+        {label:'1인평균',num:true,cls:'strong',render:function(r){return won(r['1인평균']);}},
+        {label:'계약급여',num:true,render:function(r){return won(r.계약급여);}},
+        {label:'변동급여',num:true,render:function(r){return won(r.변동급여);}},
+        {label:'연장수당계',num:true,render:function(r){return won(r.연장수당계);}},
+        {label:'연장비중',num:true,render:function(r){return '<b class="'+(r.연장비중>0.30?'neg':'')+'">'+pct(r.연장비중)+'</b>';}},
+        {label:'평균근속',num:true,render:function(r){return r.평균근속===null?'-':r.평균근속+'년';}},
+        {label:'',render:function(r){return bar(r.지급총액,max);}}
+      ], rows, '520px'));
+
+    h+=panel('법인별 요약','',table([
+      {label:'법인',render:function(r){return esc(r.법인);}},
+      {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+      {label:'지급총액',num:true,render:function(r){return won(r.지급총액);}},
+      {label:'기본급',num:true,render:function(r){return won(r.기본급);}},
+      {label:'계약급여',num:true,render:function(r){return won(r.계약급여);}},
+      {label:'변동급여',num:true,render:function(r){return won(r.변동급여);}},
+      {label:'공제총액',num:true,render:function(r){return won(r.공제총액);}},
+      {label:'실지급액',num:true,cls:'strong',render:function(r){return won(r.실지급액);}},
+      {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}}
+    ], D.byCorp));
+    h+='<div class="foot-note">※ 「온라인물류」와 「온라인물류*」가 별도 부서로 등록되어 있어 부서별 집계가 분리됩니다(3번 메뉴 R12 참고). 소속이 비어 있는 3명은 「미지정」으로 묶었습니다.</div>';
+    return h;
+  }
+
+  /* =================== 2. 월별 카테고리별 지급 =================== */
+  function v2(){
+    var cm=D.categoryMonthly;
+    var cats=['기본급','고정연장수당','추가연장수당','휴일특근수당','야근교통비','연차수당','직책수당','출장비','기타수당','상여','무급휴가차감'];
+    var h=head('2. 매월 인건비 주요 카테고리별 지급현황','집계 시트가 확보된 7개월(2025-01~06, 2026-02)의 항목별 지급액. 코코도르+코코도르팜 합산입니다.',['part','확보월만']);
+    var last=cm[cm.length-1], first=cm[0];
+    h+='<div class="kpi-row">'+
+      kpi('최신월 지급합계',man(last.지급합계),last.월)+
+      kpi('기본급 비중',pct(last.기본급/last.지급합계),man(last.기본급))+
+      kpi('고정연장 비중',pct(last.고정연장수당/last.지급합계),man(last.고정연장수당))+
+      kpi('변동연장 비중',pct((last.추가연장수당+last.휴일특근수당)/last.지급합계),man(last.추가연장수당+last.휴일특근수당))+
+      kpi('2025-01 대비',sign(last.지급합계-first.지급합계,man),pct((last.지급합계-first.지급합계)/first.지급합계)+' 증가')+
+      '</div>';
+
+    var cols=[{label:'항목',render:function(r){return esc(r);}}];
+    cm.forEach(function(m){ cols.push({label:m.월,num:true,render:function(r){
+      var v=m[r]; return v===undefined?'<span class="muted">-</span>':won(v); }}); });
+    cols.push({label:'평균',num:true,cls:'strong',render:function(r){
+      var vals=cm.map(function(m){return m[r];}).filter(function(v){return v!==undefined;});
+      return won(vals.reduce(function(a,b){return a+b;},0)/vals.length); }});
+    h+=panel('항목별 월 지급액 추이',
+      '2025-07~2026-01 구간은 집계 시트 원본이 확보되지 않아 비어 있습니다. 총액만 확보된 달은 6번 메뉴에서 확인할 수 있습니다.',
+      table(cols, cats.concat(['지급합계']), null, function(r){ return r==='지급합계'?'total-row':''; }));
+
+    var maxv=Math.max.apply(null,cm.map(function(m){return m.지급합계;}));
+    h+=panel('월별 지급합계','막대 높이는 월 지급합계입니다. 2026-02는 연차수당·상여가 겹쳐 확보월 중 가장 높습니다.',
+      '<div class="spark" style="height:70px;margin:4px 0 12px">'+cm.map(function(m){
+        return '<i class="'+(m.지급합계===maxv?'hi':'')+'" style="height:'+Math.round(m.지급합계/maxv*100)+'%" title="'+m.월+' '+won(m.지급합계)+'"></i>';
+      }).join('')+'</div>'+
+      '<div class="legend">'+cm.map(function(m){return '<span>'+m.월+' · '+man(m.지급합계)+'</span>';}).join('')+'</div>', true);
+
+    h+=panel('2026-02 항목별 지급 구성 (실측 154명)','급여대장에서 직접 집계한 값입니다.',
+      table([
+        {label:'항목',render:function(r){return esc(r.항목);}},
+        {label:'구분',render:function(r){return '<span class="tag '+(r.구분==='계약항목'?'plan':'part')+'">'+r.구분+'</span>';}},
+        {label:'총액',num:true,render:function(r){return won(r.총액);}},
+        {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+        {label:'수령인원',num:true,render:function(r){return cnt(r.수령인원)+'명';}},
+        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+        {label:'',render:function(r){return bar(Math.abs(r.총액),Math.max.apply(null,D.allowances.map(function(a){return Math.abs(a.총액);})));}}
+      ], D.allowances));
+    return h;
+  }
+
+  /* =================== 3. 오류 검증 =================== */
+  var v3Sev='전체';
+  function v3(){
+    var crit=D.issues.filter(function(i){return i.심각도==='치명';});
+    var h=head('3. 인사 급여·수당 오류 검증','17개 검증 규칙을 2026-02 급여대장 154명 전원에 적용했습니다. 합계·요율 산식은 모두 통과했고, 실제 미스는 가입·마스터 데이터 영역에 몰려 있습니다.',['real','전수검증']);
+    h+='<div class="kpi-row">'+
+      kpi('검증 규칙',D.rules.length+'개','154명 × 전 항목')+
+      kpi('치명',crit.length+'건','즉시 조치 필요','bad')+
+      kpi('주의',D.issues.filter(function(i){return i.심각도==='주의';}).length+'건','확인 후 판단')+
+      kpi('참고',D.issues.filter(function(i){return i.심각도==='참고';}).length+'건','정상 사유 추정')+
+      kpi('산식 통과','R1·R2·R3','지급·공제·실지급 합계 전원 일치')+
+      '</div>';
+
+    h+=panel('규칙별 결과','금액영향은 규칙별 차이 금액의 절대값 합계입니다.',
+      table([
+        {label:'심각도',render:function(r){return '<span class="sev '+r.심각도+'">'+r.심각도+'</span>';}},
+        {label:'검증항목',render:function(r){return esc(r.검증항목);}},
+        {label:'건수',num:true,render:function(r){return cnt(r.건수)+'건';}},
+        {label:'금액영향',num:true,render:function(r){return r.금액영향?won(r.금액영향):'<span class="muted">-</span>';}}
+      ], D.issueByRule, null, function(r){return 'stripe-'+r.심각도;}));
+
+    h+='<div class="searchbar"><select id="sevSel">'+
+      ['전체','치명','주의','참고'].map(function(s){return '<option'+(s===v3Sev?' selected':'')+'>'+s+'</option>';}).join('')+
+      '</select><input id="issQ" type="search" placeholder="이름·부서·검증항목으로 검색"></div><div id="issTbl"></div>';
+
+    h+=panel('적용 규칙 정의','',table([
+      {label:'코드',render:function(r){return '<span class="num">'+r.코드+'</span>';}},
+      {label:'항목',render:function(r){return esc(r.항목);}},
+      {label:'판정 기준',render:function(r){return '<span style="white-space:normal">'+esc(r.기준)+'</span>';}}
+    ], D.rules));
+
+    h+=panel('재직 상태 분류','휴직·중도입퇴사자는 일할계산으로 급여가 줄어들기 때문에 최저임금 검증에서 제외했습니다.',
+      table([
+        {label:'상태',render:function(r){return esc(r.상태);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}}
+      ], D.statusMix), true);
+    return h;
+  }
+  function renderIssues(){
+    var q=(document.getElementById('issQ')||{}).value||'';
+    q=q.trim().toLowerCase();
+    var rows=D.issues.filter(function(i){
+      if(v3Sev!=='전체' && i.심각도!==v3Sev) return false;
+      if(!q) return true;
+      return (i.대상+' '+i.소속+' '+i.검증항목+' '+i.내용).toLowerCase().indexOf(q)>=0;
+    });
+    var el=document.getElementById('issTbl'); if(!el) return;
+    el.innerHTML=panel('검증 미스 상세 ('+rows.length+'건)','',
+      table([
+        {label:'심각도',render:function(r){return '<span class="sev '+r.심각도+'">'+r.심각도+'</span>';}},
+        {label:'검증항목',render:function(r){return esc(r.검증항목);}},
+        {label:'대상',render:function(r){return '<b>'+esc(r.대상)+'</b>';}},
+        {label:'소속',render:function(r){return esc(r.소속);}},
+        {label:'내용',render:function(r){return '<span style="white-space:normal">'+esc(r.내용)+'</span>';}},
+        {label:'차이',num:true,render:function(r){return r.차이===null?'<span class="muted">-</span>':sign(r.차이);}}
+      ], rows, '520px', function(r){return 'stripe-'+r.심각도;}));
+  }
+
+  /* =================== 4. 개인별 급여 히스토리 =================== */
+  var v4Sel=null, v4Dept='전체';
+  function v4(){
+    var m=D.historyMeta, rs=D.raiseStats;
+    var h=head('4. 개인별 급여 히스토리 조회','이름으로 찾아 2026-02 급여명세를 항목별로 열람하고, 2025-07 계약급여와 비교합니다.',['part','2개 시점']);
+    h+='<div class="kpi-row">'+
+      kpi('조회 대상',cnt(HC)+'명','2026-02 급여대장 전원')+
+      kpi('전기 비교 가능',cnt(m.매칭인원)+'명','기준 '+m.비교기준월)+
+      kpi('중위 인상률',pct(rs.중위인상률),'비교 '+rs.비교대상+'명 (정상재직)')+
+      kpi('평균 인상률',pct(rs['평균인상률_이상치제외']),'이상치 '+rs.이상치.length+'명 제외')+
+      kpi('인상 / 동결 / 감액',rs.인상자+' / '+rs.동결+' / '+rs.감액,'월 인건비 영향 '+sign(rs.월인건비영향,man))+
+      '</div>';
+    var depts=['전체'].concat(D.byDept.map(function(d){return d.소속;}));
+    h+='<div class="searchbar"><input id="pQ" type="search" placeholder="직원 이름 또는 사번 검색"><select id="pDept">'+
+      depts.map(function(d){return '<option'+(d===v4Dept?' selected':'')+'>'+esc(d)+'</option>';}).join('')+'</select></div>';
+    h+='<div style="display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:13px" id="pGrid">'+
+       '<div class="person-list" id="pList"></div><div id="pDetail"></div></div>';
+    h+=panel('인상률 분포 (2025-07 → 2026-02 계약급여)','계약급여 = 기본급 + 고정연장수당 + 직책수당 등 매월 고정 지급되는 금액입니다.',
+      table([
+        {label:'구간',render:function(r){return esc(r.구간);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'월 금액 변동',num:true,render:function(r){return r.금액===0?'<span class="muted">-</span>':sign(r.금액);}},
+        {label:'',render:function(r){return bar(r.인원,Math.max.apply(null,D.raiseBands.map(function(b){return b.인원;})));}}
+      ], D.raiseBands));
+    if(rs.이상치.length){
+      h+=panel('인상률 이상치 — 원본 확인 필요','2025-07 파일의 계약급여가 비정상적으로 작아 인상률이 왜곡된 건입니다. 휴직·중도입사 등 원본 사유를 확인해야 합니다.',
+        table([
+          {label:'성명',render:function(r){return esc(r.성명);}},
+          {label:'소속',render:function(r){return esc(r.소속);}},
+          {label:'2025-07',num:true,render:function(r){return won(r.전기);}},
+          {label:'2026-02',num:true,render:function(r){return won(r.당기);}},
+          {label:'인상률',num:true,render:function(r){return '<b class="neg">'+pct(r.인상률,0)+'</b>';}}
+        ], rs.이상치));
+    }
+    h+='<div class="foot-note">※ '+esc(m.비고)+'</div>';
+    return h;
+  }
+  function renderPeople(){
+    var q=((document.getElementById('pQ')||{}).value||'').trim().toLowerCase();
+    var list=D.employees.filter(function(e){
+      if(v4Dept!=='전체' && e.소속!==v4Dept) return false;
+      if(!q) return true;
+      return (e.성명+' '+(e.직원번호||'')).toLowerCase().indexOf(q)>=0;
+    });
+    var el=document.getElementById('pList'); if(!el) return;
+    if(!list.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">검색 결과가 없습니다.</div>'; }
+    else{
+      el.innerHTML=list.map(function(e){
+        var sel=v4Sel && v4Sel.성명===e.성명 && v4Sel.직원번호===e.직원번호;
+        return '<button class="person-row" role="option" aria-selected="'+(sel?'true':'false')+'" data-emp="'+esc(e.직원번호||e.성명)+'">'+
+          '<span><b>'+esc(e.성명)+'</b><br><span class="sub">'+esc(e.소속)+' · '+esc(e.직책)+'</span></span>'+
+          '<span class="num" style="font-size:11.5px;text-align:right">'+man(e.지급총액)+
+          '<br><span class="sub">'+(e.근속년수===null?'-':e.근속년수+'년')+'</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-emp]').forEach(function(b){
+        b.addEventListener('click',function(){
+          var k=b.getAttribute('data-emp');
+          v4Sel=D.employees.filter(function(e){return (e.직원번호||e.성명)===k;})[0];
+          renderPeople(); renderDetail();
+        });
+      });
+    }
+    if(!v4Sel && list.length) v4Sel=list[0];
+    renderDetail();
+  }
+  function renderDetail(){
+    var el=document.getElementById('pDetail'); if(!el) return;
+    var e=v4Sel;
+    if(!e){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 직원을 선택하세요.</div></div>'; return; }
+    var PAY=[['기본급',e.기본급],['고정연장수당',e.고정연장수당],['직책수당',e.직책수당],['장거리유류비',e.장거리유류비],['식대',e.식대],
+             ['연장근로수당',e.연장근로수당],['휴일특근수당',e.휴일특근수당],['야근교통비',e.야근교통비],['야간수당',e.야간수당],
+             ['연차수당',e.연차수당],['연가보상비',e.연가보상비],['상여',e.상여],['출장비',e.출장비],['기타수당',e.기타수당],
+             ['상품권지급',e.상품권지급],['소급급여',e.소급급여],['무급휴가',e.무급휴가],['무급휴가차감',e.무급휴가차감]];
+    var DED=[['국민연금',e['국민연금4.75%']],['건강보험료',e['건강보험료3.595%']],['장기요양보험료',e['장기요양보험료건보료의 13.14%']],
+             ['고용보험',e['고용보험0.9%']],['소득세',e.소득세],['지방소득세',e.지방소득세],
+             ['건강보험정산',e.건강보험정산],['노인장기요양정산',e.노인장기요양정산],
+             ['연말정산소득세',e.연말정산소득세],['연말정산지방소득세',e.연말정산지방소득세],
+             ['기지급분',e.기지급분],['기타공제',e.기타공제]];
+    function lines(arr){ return arr.filter(function(x){return x[1];}).map(function(x){
+      return '<div class="line"><span>'+x[0]+'</span><span>'+won(x[1])+'</span></div>'; }).join('')
+      || '<div class="line"><span class="muted">해당 항목 없음</span><span>-</span></div>'; }
+
+    var h='<div class="panel flat">';
+    h+='<div class="panel-head"><h2>'+esc(e.성명)+' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+
+       esc(e.직원번호||'')+'</span></h2><div class="panel-note">2026년 2월 귀속 급여명세</div></div>';
+    h+='<dl class="kv">'+
+       '<dt>소속</dt><dd>'+fnDot(e.소속)+' '+esc(e.소속)+' ('+esc(e.법인)+')</dd>'+
+       '<dt>직책</dt><dd>'+esc(e.직책)+'</dd>'+
+       '<dt>입사일</dt><dd>'+esc(e.입사일||'-')+(e.근속년수!==null?' · 근속 '+e.근속년수+'년':'')+'</dd>'+
+       '<dt>재직상태</dt><dd>'+esc(e.재직상태||'정상')+(e.퇴사일?' (퇴사 '+esc(e.퇴사일)+')':'')+'</dd>'+
+       '</dl>';
+    h+='<div class="kpi-row" style="margin:12px 0 10px">'+
+       kpi('지급총액',won(e.지급총액),'과세 '+won(e.과세합계),'lead')+
+       kpi('공제총액',won(e.공제총액),'공제율 '+(e.지급총액?pct(e.공제총액/e.지급총액):'-'))+
+       kpi('실지급액',won(e.실지급액),'')+
+       kpi('계약급여',won(e.계약급여),'변동급여 '+won(e.변동급여))+
+       '</div>';
+    if(e.전기계약급여){
+      h+='<div class="kpi-row" style="margin-bottom:10px">'+
+         kpi('2025-07 계약급여',won(e.전기계약급여),esc(e.전기소속||'')+(e.전기직책?' · '+esc(e.전기직책):''))+
+         kpi('2026-02 계약급여',won(e.계약급여),esc(e.소속)+' · '+esc(e.직책))+
+         kpi('변동액',sign(e.인상액),'')+
+         kpi('인상률',(e.인상률>=0?'<b class="pos">+':'<b class="neg">')+pct(e.인상률)+'</b>','중위 '+pct(D.raiseStats.중위인상률)+' 대비')+
+         '</div>';
+    }else{
+      h+='<div class="foot-note" style="padding-top:0">2025-07 급여 원본에서 매칭되지 않아 전기 비교가 불가합니다 (신규 입사 또는 사번 변경).</div>';
+    }
+    h+='<div class="slip">'+
+       '<section><h4>지급 항목</h4>'+lines(PAY)+
+       '<div class="line tot"><span>지급총액</span><span>'+won(e.지급총액)+'</span></div></section>'+
+       '<section><h4>공제 항목</h4>'+lines(DED)+
+       '<div class="line tot"><span>공제총액</span><span>'+won(e.공제총액)+'</span></div></section>'+
+       '<section><h4>차인지급</h4>'+
+       '<div class="line"><span>지급총액</span><span>'+won(e.지급총액)+'</span></div>'+
+       '<div class="line"><span>공제총액</span><span>'+won(-e.공제총액)+'</span></div>'+
+       '<div class="line tot"><span>실지급액</span><span>'+won(e.실지급액)+'</span></div></section>'+
+       '</div></div>';
+    el.innerHTML=h;
+  }
+
+  /* =================== 5. 각종 수당 현황 =================== */
+  function v5(){
+    var a=D.allowances, variable=a.filter(function(x){return x.구분==='변동항목';});
+    var h=head('5. 각종 수당 현황','기본급을 제외한 전 수당 항목의 지급 규모·수령 인원·부서 분포입니다.',['real','실측']);
+    var fix=a.filter(function(x){return x.항목==='고정연장수당';})[0];
+    h+='<div class="kpi-row">'+
+      kpi('수당 총액',man(TOT-a.filter(function(x){return x.항목==='기본급';})[0].총액),'총 지급액의 '+pct((TOT-a.filter(function(x){return x.항목==='기본급';})[0].총액)/TOT))+
+      kpi('고정연장수당',man(fix.총액),fix.수령인원+'명 · 1인평균 '+man(fix['1인평균']),'lead')+
+      kpi('변동 수당 합계',man(variable.reduce(function(s,x){return s+x.총액;},0)),variable.length+'개 항목')+
+      kpi('식대',won(D.talentFacts.식대),'전원 미지급 · 비과세 한도 미활용','bad')+
+      kpi('상여',man(a.filter(function(x){return x.항목==='상여';})[0].총액),'수령 1명 — 제도화 필요')+
+      '</div>';
+
+    h+=panel('수당 항목별 지급 현황','비중은 월 총 지급액 대비입니다. 마이너스 항목은 차감 항목입니다.',
+      table([
+        {label:'항목',render:function(r){return esc(r.항목);}},
+        {label:'구분',render:function(r){return '<span class="tag '+(r.구분==='계약항목'?'plan':'part')+'">'+r.구분+'</span>';}},
+        {label:'월 총액',num:true,render:function(r){return won(r.총액);}},
+        {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+        {label:'연환산',num:true,render:function(r){return man(r.총액*12);}},
+        {label:'수령인원',num:true,render:function(r){return cnt(r.수령인원)+'명';}},
+        {label:'수령률',num:true,render:function(r){return pct(r.수령인원/HC);}},
+        {label:'1인평균',num:true,cls:'strong',render:function(r){return won(r['1인평균']);}}
+      ], a));
+
+    var keys=Object.keys(D.allowanceByDept);
+    h+=panel('수당별 부서 분포','수당이 특정 부서에 몰려 있는지 확인합니다. 편중은 업무량 불균형이거나 기준 미비의 신호입니다.',
+      keys.map(function(k){
+        var rows=D.allowanceByDept[k]; if(!rows.length) return '';
+        var tot=rows.reduce(function(s,r){return s+r.금액;},0);
+        var max=Math.max.apply(null,rows.map(function(r){return r.금액;}));
+        return '<div style="margin-bottom:14px"><div style="font-size:12.5px;font-weight:600;margin-bottom:5px">'+
+          esc(k)+' <span class="muted" style="font-weight:400">· 월 '+won(tot)+' · '+rows.length+'개 부서</span></div>'+
+          table([
+            {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+            {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+            {label:'금액',num:true,render:function(r){return won(r.금액);}},
+            {label:'비중',num:true,render:function(r){return pct(r.금액/tot);}},
+            {label:'',render:function(r){return bar(r.금액,max);}}
+          ], rows.slice(0,8))+'</div>';
+      }).join(''), true);
+    return h;
+  }
+
+  /* =================== 6. 매출대비 인건비 =================== */
+  function v6(){
+    var h=head('6. 매출 대비 인건비 현황','기존 「SKU 손익 사령탑」의 ERP 전사 매출과 인건비를 같은 축에 놓고 봅니다. 2023~2024년은 3개년 인건비 통합자료의 법인합산 매출 기준입니다.',['part','기준 혼재']);
+    var y23=D.yearly[0], y24=D.yearly[1];
+    h+='<div class="kpi-row">'+
+      kpi('2023 인건비율',pct(y23.인건비율),eok(y23.인건비)+' / '+eok(y23.매출))+
+      kpi('2024 인건비율',pct(y24.인건비율),eok(y24.인건비)+' / '+eok(y24.매출))+
+      kpi('2025 ERP 매출',eok(D.yearly[2].매출),'인건비 일부월 결측')+
+      kpi('2026 ERP 매출',eok(D.yearly[3].매출),'1~8월 누계')+
+      kpi('2026-02 인건비율',pct(502054026/3296090299),'월 '+man(502054026)+' / 매출 '+eok(3296090299),'lead')+
+      '</div>';
+
+    ['2023','2024','2025','2026'].forEach(function(y){
+      var rows=D.monthly[y].filter(function(r){return r.인건비||r.매출||r.ERP매출;});
+      if(!rows.length) return;
+      h+=panel(y+'년 월별 매출 · 인건비',
+        y==='2025'||y==='2026' ? 'ERP매출은 SKU 손익 사령탑과 동일 기준입니다. 인건비율은 ERP매출을 우선 분모로 씁니다.' :
+        '3개년 인건비 통합자료(법인 합산 매출) 기준입니다.',
+        table([
+          {label:'월',render:function(r){return r.월;}},
+          {label:'매출(법인합산)',num:true,render:function(r){return r.매출?eok(r.매출):'<span class="muted">-</span>';}},
+          {label:'ERP 전사매출',num:true,render:function(r){return r.ERP매출?eok(r.ERP매출):'<span class="muted">-</span>';}},
+          {label:'총 인건비',num:true,render:function(r){return r.인건비?won(r.인건비):'<span class="muted">-</span>';}},
+          {label:'연장수당',num:true,render:function(r){return r.연장수당?won(r.연장수당):'<span class="muted">-</span>';}},
+          {label:'인건비율',num:true,cls:'strong',render:function(r){
+            if(r.인건비율===null) return '<span class="muted">-</span>';
+            var c=r.인건비율>0.15?'neg':(r.인건비율<0.12?'pos':'');
+            return '<b class="'+c+'">'+pct(r.인건비율)+'</b>'; }}
+        ], rows, null, function(r){return '';}));
+    });
+    h+='<div class="foot-note">※ 인건비율 해석 주의 — 2023·2024년 분모는 4개 법인 합산 매출, 2025~2026년 분모는 ERP 전사 매출로 기준이 다릅니다. 연도 간 직접 비교보다 같은 기준 내 추세로 읽어야 합니다. 2025년 7~9월, 2026년 3월 이후 인건비는 원본 미확보 구간입니다.</div>';
+    return h;
+  }
+
+  /* =================== 7. 미래 조직 구조 =================== */
+  function v7(){
+    var h=head('7. 미래 조직 구조','2025-07 대비 2026-02에 이미 대규모 개편이 있었습니다. 이 실측 이동을 출발점으로 다음 구조를 설계합니다.',['part','실측+제안']);
+    h+='<div class="kpi-row">'+
+      kpi('현 부서 수',D.byDept.length+'개','154명 / 부서당 평균 '+(HC/D.byDept.length).toFixed(1)+'명')+
+      kpi('개편 이동 인원',D.orgMoves.length+'명','비교 가능 '+D.historyMeta.매칭인원+'명 중 '+pct(D.orgMoves.length/D.historyMeta.매칭인원),'lead')+
+      kpi('직책 보유',D.talentFacts.직책보유+'명','관리 스팬 1:'+(HC/D.talentFacts.직책보유).toFixed(1))+
+      kpi('생산·물류 비중',pct(D.talentFacts.생산물류비중),'인원 '+D.byFunction.filter(function(f){return f.기능==='생산·물류';})[0].인원+'명')+
+      kpi('외국인 인력',D.talentFacts.외국인추정+'명','전체의 '+pct(D.talentFacts.외국인추정/HC))+
+      '</div>';
+
+    h+=panel('현 구조의 구조적 문제 3가지','',
+      '<div class="cards">'+[
+        ['부서 파편화','30개 부서에 154명 — 부서당 평균 5.1명입니다. 3명 이하 부서가 '+
+         D.byDept.filter(function(d){return d.인원<=3;}).length+'개로, 대체인력·승계가 불가능한 1인 기능이 다수입니다.'],
+        ['관리 스팬 불균형','직책 보유자가 '+D.talentFacts.직책보유+'명(파트장 7·반장 5·임원 등)으로 1인당 '+
+         (HC/D.talentFacts.직책보유).toFixed(1)+'명을 봅니다. 반면 직책수당은 13명에게만 월 200만원 — 책임과 보상이 어긋나 있습니다.'],
+        ['부서 마스터 미정비','「온라인물류」/「온라인물류*」 이중 표기, 소속 미지정 3명. 조직 개편이 급여 시스템에 정확히 반영되지 않아 집계가 왜곡됩니다.']
+      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+
+    h+=panel('제안: 4본부 체제로 통합','현 30개 부서를 기능 단위 4본부로 묶고, 본부장 책임과 직책수당을 연동합니다.',
+      table([
+        {label:'본부(안)',render:function(r){return '<span class="dot" style="background:'+FN_COLOR[r.기능]+'"></span> '+esc(r.기능);}},
+        {label:'현 인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'월 인건비',num:true,render:function(r){return won(r.인건비);}},
+        {label:'비중',num:true,render:function(r){return pct(r.인건비비중);}},
+        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+        {label:'포함 부서',render:function(r){return '<span style="white-space:normal">'+esc(FUNC[r.기능].join(', '))+'</span>';}}
+      ], D.byFunction.filter(function(f){return FUNC[f.기능];})));
+
+    h+=panel('2025-07 → 2026-02 실제 소속 이동 ('+D.orgMoves.length+'명)','조직 개편의 실측 기록입니다. 다음 개편의 기준선으로 씁니다.',
+      table([
+        {label:'성명',render:function(r){return esc(r.성명);}},
+        {label:'2025-07 소속',render:function(r){return esc(r['2025-07']);}},
+        {label:'2026-02 소속',render:function(r){return fnDot(r['2026-02'])+' '+esc(r['2026-02']);}},
+        {label:'직책',render:function(r){return esc(r.직책변화);}}
+      ], D.orgMoves, '420px'));
+
+    h+=panel('근속 구조 — 승계 위험','10년 이상 '+D.talentFacts.근속10년이상+'명이 조직 지식을 보유합니다. 이들의 이탈은 즉시 복구가 불가능합니다.',
+      table([
+        {label:'근속 구간',render:function(r){return esc(r.구간);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'비중',num:true,render:function(r){return pct(r.인원/HC);}},
+        {label:'월 인건비',num:true,render:function(r){return won(r.인건비);}},
+        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+        {label:'',render:function(r){return bar(r.인원,Math.max.apply(null,D.tenure.map(function(t){return t.인원;})));}}
+      ], D.tenure));
+    return h;
+  }
+
+  /* =================== 8. 인건비 절감 =================== */
+  function v8(){
+    var h=head('8. 인건비 절감 방안','현 월 인건비 '+man(TOT)+'(연환산 '+eok(D.costBase.연환산)+') 기준, 실측 항목에서 도출한 6개 과제입니다.',['plan','정량 추정']);
+    h+='<div class="kpi-row">'+
+      kpi('연 절감 가능액',eok(D.savingsTotal),'연환산 인건비의 '+pct(D.savingsTotal/D.costBase.연환산),'lead')+
+      kpi('즉시 실행 가능',eok(D.savings.filter(function(s){return s.난이도==='하';}).reduce(function(a,s){return a+s.연절감액;},0)),'난이도 하 과제 합계')+
+      kpi('연장수당 총계(연)',eok(D.costBase.연장수당총계*12),'최대 절감 여지')+
+      kpi('과제 수',D.savings.length+'개','1~6번 순서대로 실행')+
+      '</div>';
+    h+='<div class="steps">'+D.savings.map(function(s){
+      return '<div class="step"><div class="qn">'+String(s.번호).padStart(2,'0')+'</div><div>'+
+        '<h3>'+esc(s.과제)+'</h3>'+
+        '<p><b>현황</b> — '+esc(s.현황)+'</p>'+
+        '<p><b>방법</b> — '+esc(s.방법)+'</p>'+
+        '<p><b>리스크</b> — '+esc(s.리스크)+'</p>'+
+        '<div class="kpi-row" style="margin:9px 0 0">'+
+          kpi('연 절감 추정',s.연절감액?eok(s.연절감액):'<span style="font-size:13px">간접효과</span>', s.절감률?'절감률 '+pct(s.절감률,0)+' 가정':'리스크 차단')+
+          kpi('난이도',s.난이도,'실행기간 '+s.기간)+
+        '</div></div></div>';
+    }).join('')+'</div>';
+    h+='<div class="foot-note">※ 절감액은 「현 지급 수준 × 절감률 가정 × 12개월」로 산출한 추정치입니다. 절감률 가정은 과제별로 명시했으며, 실제 효과는 근태 실측·취업규칙 검토 후 확정해야 합니다. 2번 과제(고정연장수당 재설계)는 취업규칙 불이익변경에 해당할 수 있어 근로자 과반수 동의 없이는 기존 인원에 적용할 수 없습니다.</div>';
+    return h;
+  }
+
+  /* =================== 9. 인재 육성 =================== */
+  function v9(){
+    var t=D.talentFacts;
+    var h=head('9. 인재 육성 전략','근속 3년 미만이 '+t.근속3년미만+'명('+pct(t.근속3년미만/HC)+')인 조직에서는, 육성이 곧 이직 방지입니다.',['plan','제안']);
+    h+='<div class="kpi-row">'+
+      kpi('근속 1년 미만',t.근속1년미만+'명',pct(t.근속1년미만/HC)+' — 온보딩 최우선','bad')+
+      kpi('근속 3년 미만',t.근속3년미만+'명',pct(t.근속3년미만/HC))+
+      kpi('근속 10년 이상',t.근속10년이상+'명','지식 승계 대상')+
+      kpi('직책 보유',t.직책보유+'명','리더 후보 육성 필요')+
+      kpi('외국인 인력',t.외국인추정+'명',pct(t.외국인추정/HC)+' — 언어·정착 지원 필요')+
+      '</div>';
+    h+='<div class="steps">'+[
+      ['입사 90일 온보딩 트랙','근속 1년 미만 '+t.근속1년미만+'명이 전체의 '+pct(t.근속1년미만/HC)+'. 조기이직은 이 구간에서 결정됩니다.',
+       '30일(업무 이해)·60일(독립 수행)·90일(성과 리뷰) 3회 면담을 의무화하고, 부서별 멘토를 지정합니다. 90일 잔존율을 인사 KPI로 관리합니다.',
+       '분기별 90일 잔존율 · 부서별 조기이직 건수'],
+      ['생산·물류 직무 숙련 등급제','인원의 '+pct(t.생산물류비중)+'가 생산·물류이고, 이 기능의 1인평균 급여는 '+
+       man(D.byFunction.filter(function(f){return f.기능==='생산·물류';})[0]['1인평균'])+'로 전사 평균 '+man(t['1인평균'])+' 대비 낮습니다.',
+       '작업 숙련도를 3등급(기본·숙련·다기능)으로 정의하고 등급별 수당을 신설합니다. 연장근로에 의존한 소득 보전 구조를 숙련 보상으로 전환합니다.',
+       '등급 취득자 수 · 다기능 인력 비율 · 해당 부서 연장수당 감소액'],
+      ['외국인 인력 정착 프로그램',t.외국인추정+'명('+pct(t.외국인추정/HC)+')이 외국 국적으로 추정되며, 음성·용인 생산과 물류에 집중되어 있습니다.',
+       '한국어·안전교육 정기 과정, 통역 가능한 반장 배치, 4대보험·급여명세 다국어 안내를 운영합니다. 급여 검증에서 드러난 장기요양 가입제외 21건도 이 채널로 안내합니다.',
+       '외국인 1년 잔존율 · 안전사고 건수 · 급여 문의 건수'],
+      ['파트장·반장 리더십 과정','직책 보유자가 '+t.직책보유+'명뿐이고 관리 스팬이 1:'+(HC/t.직책보유).toFixed(1)+'입니다. 중간관리자 공백이 조기이직의 직접 원인입니다.',
+       '파트장 7명·반장 5명 대상 분기 1회 과정(면담 기법·근태 관리·연장근로 승인 기준)을 운영합니다. 8번 메뉴의 연장 사전승인제와 같은 과정에서 교육합니다.',
+       '과정 이수율 · 담당 부서 90일 잔존율 · 연장 사전승인 준수율'],
+      ['핵심인력 지식 승계','근속 10년 이상 '+t.근속10년이상+'명이 보유한 공정·거래처 지식은 문서화되어 있지 않습니다.',
+       '직무별 핵심 지식을 문서화하고 후임 1명을 지정해 6개월간 병행 수행합니다. 대상자에게 승계 수당을 지급합니다.',
+       '문서화 완료 직무 수 · 후임 지정률 · 단독 수행 가능 인원']
+    ].map(function(s,i){
+      return '<div class="step"><div class="qn">'+String(i+1).padStart(2,'0')+'</div><div><h3>'+s[0]+'</h3>'+
+        '<p><b>근거</b> — '+s[1]+'</p><p><b>실행</b> — '+s[2]+'</p><p><b>측정</b> — '+s[3]+'</p></div></div>';
+    }).join('')+'</div>';
+    return h;
+  }
+
+  /* =================== 10. 복리후생 =================== */
+  function v10(){
+    var h=head('10. 복리후생 강화 전략','현 복리후생 지출은 사실상 0원입니다. 식대 비과세 한도조차 쓰지 않고 있어, 같은 비용으로 실수령액을 올릴 여지가 큽니다.',['plan','제안']);
+    var mealCost=HC*200000;
+    h+='<div class="kpi-row">'+
+      kpi('현 식대 지급',won(D.talentFacts.식대),'154명 전원 0원','bad')+
+      kpi('식대 비과세 한도',won(200000)+'/월','1인당 · 전액 미활용')+
+      kpi('전 직원 식대 도입 시',man(mealCost)+'/월','연 '+eok(mealCost*12))+
+      kpi('연장수당 의존도',pct(D.costBase.연장수당총계/TOT),'소득 보전이 연장근로에 묶여 있음')+
+      kpi('상여 수령',D.allowances.filter(function(a){return a.항목==='상여';})[0].수령인원+'명','제도화되지 않음')+
+      '</div>';
+    h+='<div class="cards">'+[
+      ['1순위 · 식대 비과세 전환','즉시','현재 식대가 0원이므로, 기본급의 일부를 식대로 재배분하면 회사 부담 증가 없이 직원 과세소득이 월 20만원 줄어듭니다. 소득세·4대보험료가 함께 줄어 회사 부담분도 감소합니다. 기본급 감소는 불이익변경이므로 신규 입사자부터 적용하거나, 인상분을 식대로 배정하는 방식이 안전합니다.'],
+      ['2순위 · 성과 상여 제도화','1분기','현재 상여를 받은 사람은 1명뿐입니다. 연장수당으로 소득을 보전하는 구조 대신, 부서 목표 달성 시 지급하는 반기 상여를 신설하면 8번 과제(연장 축소)의 보상 공백을 메울 수 있습니다.'],
+      ['3순위 · 장기근속 포상','2분기','근속 10년 이상이 '+D.talentFacts.근속10년이상+'명뿐입니다. 3년·5년·10년 시점 포상(휴가+포상금)을 제도화해 근속 3년 벽을 넘도록 설계합니다.'],
+      ['4순위 · 통근·기숙 지원','2분기','야근교통비가 월 '+won(D.costBase.야근교통비)+'로 28명에게만 지급됩니다. 음성·용인·고성 사업장의 통근 여건을 실사해 통근버스 또는 기숙 지원으로 전환하면, 외국인 인력 '+D.talentFacts.외국인추정+'명의 정착률에 직접 영향을 줍니다.'],
+      ['5순위 · 건강검진·단체보험','3분기','생산·물류 인원이 '+pct(D.talentFacts.생산물류비중)+'로 산업재해 노출이 큰 구조입니다. 법정 검진 외 종합검진과 단체상해보험은 비용 대비 체감도가 높은 항목입니다.'],
+      ['재원 · 8번 과제 절감액 재투자','연중','8번 인건비 절감 과제의 연 '+eok(D.savingsTotal)+' 중 일부를 복리후생 재원으로 돌리면, 총 인건비를 늘리지 않고 체감 처우를 개선할 수 있습니다. 연장수당을 줄이고 복리후생으로 전환하는 것이 이 전략의 핵심입니다.']
+    ].map(function(c){
+      return '<div class="card"><div class="eyebrow">'+c[1]+'</div><h3>'+c[0]+'</h3><p>'+c[2]+'</p></div>';
+    }).join('')+'</div>';
+    h+='<div class="foot-note">※ 식대 전환의 절감 효과는 개인별 과세표준에 따라 달라집니다. 기본급을 낮추는 방식은 근로조건 불이익변경에 해당하므로, 시행 전 노무 검토가 필요합니다.</div>';
+    return h;
+  }
+
+  /* =================== 11. 인재 확보 =================== */
+  function v11(){
+    var t=D.talentFacts;
+    var h=head('11. 인재 확보 전략','채용은 이미 하고 있습니다. 문제는 확보가 아니라 유지입니다 — 1년 미만이 '+t.근속1년미만+'명이라는 것은 채용한 만큼 빠져나간다는 뜻입니다.',['plan','제안']);
+    h+='<div class="kpi-row">'+
+      kpi('연간 채용 압력',t.근속1년미만+'명/년','1년 미만 재직자 수 = 최근 1년 채용 규모','bad')+
+      kpi('1인 대체비용(가정)',man(4500000),'채용·교육·생산성 손실')+
+      kpi('연간 대체비용',eok(t.근속1년미만*4500000),'조기이직 30% 감축 시 '+man(t.근속1년미만*0.3*4500000)+' 회피')+
+      kpi('외국인 비중',pct(t.외국인추정/HC),t.외국인추정+'명 — 생산 인력의 핵심 축')+
+      kpi('1인 평균 급여',man(t['1인평균']),'시장 경쟁력 점검 필요')+
+      '</div>';
+    h+='<div class="steps">'+[
+      ['채용 전 이탈 원인부터 막는다','1년 미만 '+t.근속1년미만+'명, 3년 미만 '+t.근속3년미만+'명. 신규 채용을 늘려도 같은 비율로 빠져나가면 순증이 없습니다.',
+       '9번 메뉴의 90일 온보딩을 먼저 가동하고, 퇴사자 전원 면담(Exit Interview)을 의무화해 부서별 이탈 사유를 데이터로 축적합니다. 채용 확대는 그 다음입니다.'],
+      ['생산·물류 채용 채널 이원화','생산·물류가 인원의 '+pct(t.생산물류비중)+'이고 외국인이 '+t.외국인추정+'명입니다. 이 인력의 안정 공급이 사업 연속성과 직결됩니다.',
+       '① 외국인: E-9/H-2 쿼터 일정에 맞춘 연간 채용 계획 수립, 기존 재직자 추천 보상제 운영. ② 내국인: 음성·용인·고성 지역 채용 채널(지역 고용센터·특성화고)을 별도 관리합니다.'],
+      ['경력직은 직무 단위로 좁혀서 뽑는다','3명 이하 부서가 '+D.byDept.filter(function(d){return d.인원<=3;}).length+'개로, 대체 불가능한 1인 기능이 다수입니다.',
+       '오일연구소·품질·CX 등 소규모 핵심 기능은 결원 발생 후가 아니라 상시 후보군(Talent Pool)을 유지합니다. 7번 메뉴 4본부 체제로 통합하면 본부 내 대체 배치도 가능해집니다.'],
+      ['보상 경쟁력을 연장수당이 아닌 계약급여로 확보','현재 소득의 '+pct(D.costBase.연장수당총계/TOT)+'가 연장수당입니다. 지원자 입장에서 "기본급이 낮은 회사"로 보입니다.',
+       '채용 공고의 제시 금액을 계약급여(기본급+고정연장) 기준으로 명확히 하고, 8번 과제로 줄인 변동수당을 계약급여로 이전해 제시 경쟁력을 높입니다.'],
+      ['추천 채용 보상제','재직자 추천은 조기이직률이 가장 낮은 채널입니다. 외국인 인력 '+t.외국인추정+'명의 네트워크가 이미 존재합니다.',
+       '추천으로 입사한 인원이 6개월 근속 시 추천인·입사자 모두에게 보상을 지급합니다. 1인 대체비용 '+man(4500000)+' 대비 저비용 채널입니다.']
+    ].map(function(s,i){
+      return '<div class="step"><div class="qn">'+String(i+1).padStart(2,'0')+'</div><div><h3>'+s[0]+'</h3>'+
+        '<p><b>근거</b> — '+s[1]+'</p><p><b>실행</b> — '+s[2]+'</p></div></div>';
+    }).join('')+'</div>';
+    h+='<div class="foot-note">※ 1인 대체비용 450만원은 채용 공고·면접 공수·입사 교육·숙련 도달까지의 생산성 손실을 합산한 업계 통용 추정치입니다. 회사 실적 데이터가 축적되면 실측치로 교체해야 합니다.</div>';
+    return h;
+  }
+
+  /* =================== 12. 데이터 출처 =================== */
+  function v12(){
+    var h=head('데이터 출처 및 한계','이 대시보드의 모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
+    var SRC=[
+      ['00.코코도르 외 급여_2026.02.xlsx','2026-02 급여대장 154명 전원 (지급 16항목·공제 14항목), 직원명부 165명, 연장·출장 집계','사용','1·2·3·4·5·7번 메뉴의 모든 실측 숫자'],
+      ['2508 급여.xlsx','2025-07 계약급여(기본급+고정연장), 2025-06 집계 시트','부분 사용','4번 전기 비교, 2번 2025-06 항목별'],
+      ['2506 인건비통합 3년간 비용.xlsx','2023-01~2025-05 월별 인건비·매출, 2025-01~05 항목별 집계','사용','2번·6번 메뉴'],
+      ['SKU 손익 사령탑 (기존 대시보드)','ERP 전사 매출 2025년 12개월·2026년 1~8월','사용','6번 매출 대비 인건비'],
+      ['전사 급여내역_25.01.01 / 24.12.31 / 25.04.28.xlsx','개인별 급여 이력 (2024~2025)','열람 불가','암호로 보호되어 열 수 없음 — 4번 메뉴 히스토리가 2개 시점으로 제한된 직접 원인'],
+      ['대만법인 급여 파일','대만 법인 인건비','미포함','국내 2개 법인(코코도르·코코도르팜)만 집계']
+    ];
+    h+=panel('사용한 원본 파일','',table([
+      {label:'파일',render:function(r){return '<b>'+esc(r[0])+'</b>';}},
+      {label:'담긴 내용',render:function(r){return '<span style="white-space:normal">'+esc(r[1])+'</span>';}},
+      {label:'상태',render:function(r){return '<span class="tag '+(r[2]==='사용'?'real':(r[2]==='열람 불가'?'part':'plan'))+'">'+r[2]+'</span>';}},
+      {label:'반영 위치',render:function(r){return '<span style="white-space:normal">'+esc(r[3])+'</span>';}}
+    ], SRC));
+
+    h+=panel('확인되지 않은 것 (읽을 때 주의)','',
+      '<div class="cards">'+[
+        ['개인별 급여 히스토리는 2개 시점뿐','2024~2025년 전사 급여내역 파일 3종이 모두 암호로 잠겨 있습니다. 비밀번호를 제공받으면 월 단위 전체 이력으로 확장할 수 있습니다.'],
+        ['인건비 결측 구간','2025년 7·8·9월과 2026년 3월 이후 인건비는 원본이 없습니다. 6번 메뉴 표에서 빈칸으로 표시했습니다.'],
+        ['매출 기준이 두 가지','2023~2024년은 4개 법인 합산 매출, 2025~2026년은 ERP 전사 매출입니다. 연도 간 인건비율을 직접 비교하면 안 됩니다.'],
+        ['수당 지급 사유는 미확인','기타수당 15명·상여 1명 등의 지급 근거 문서는 확인하지 못했습니다. 금액만 집계한 것입니다.'],
+        ['외국인 여부는 이름 기반 추정',''+D.talentFacts.외국인추정+'명은 성명 표기에서 추정한 값으로, 국적 데이터가 아닙니다.'],
+        ['절감액·대체비용은 추정','8·11번 메뉴의 금액은 명시한 가정에 따른 추정치이며 확정 효과가 아닙니다.']
+      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+
+    h+=panel('적용한 법정 기준','',table([
+      {label:'항목',render:function(r){return esc(r[0]);}},
+      {label:'적용값',render:function(r){return '<span class="num">'+esc(r[1])+'</span>';}},
+      {label:'근거',render:function(r){return esc(r[2]);}}
+    ], [
+      ['2026년 최저임금','시급 10,320원 / 월 2,156,880원','209시간 기준 월 환산'],
+      ['국민연금 (근로자)','4.75% · 상한 302,575원','급여대장 헤더 표기'],
+      ['건강보험 (근로자)','3.595%','급여대장 헤더 표기'],
+      ['장기요양보험','건강보험료 × 13.14%','급여대장 헤더 표기'],
+      ['고용보험 (근로자)','0.9%','급여대장 헤더 표기'],
+      ['지방소득세','소득세 × 10%','지방세법']
+    ]));
+    return h;
+  }
+
+  /* =================== nav / router =================== */
+  var VIEWS=[
+    {id:'v0', n:'0',  t:'인사 CFO 요약',               f:v0},
+    {id:'v1', n:'1',  t:'부서별 인건비 현황',            f:v1},
+    {id:'v2', n:'2',  t:'매월 인건비 카테고리별 지급',     f:v2},
+    {id:'v3', n:'3',  t:'급여·수당 오류 검증',           f:v3},
+    {id:'v4', n:'4',  t:'개인별 급여 히스토리 조회',       f:v4},
+    {id:'v5', n:'5',  t:'각종 수당 현황',               f:v5},
+    {id:'v6', n:'6',  t:'매출 대비 인건비 현황',          f:v6},
+    {id:'v7', n:'7',  t:'미래 조직 구조',               f:v7},
+    {id:'v8', n:'8',  t:'인건비 절감 방안',             f:v8},
+    {id:'v9', n:'9',  t:'인재 육성 전략',               f:v9},
+    {id:'v10',n:'10', t:'복리후생 강화 전략',            f:v10},
+    {id:'v11',n:'11', t:'인재 확보 전략',               f:v11},
+    {id:'v12',n:'·',  t:'데이터 출처 및 한계',           f:v12}
+  ];
+  var cur='v0';
+  function buildNav(){
+    var h='<div class="nav-sep">현황 진단</div>';
+    VIEWS.forEach(function(v,i){
+      if(v.id==='v7') h+='<div class="nav-sep">전략 설계</div>';
+      if(v.id==='v12') h+='<div class="nav-sep">부록</div>';
+      h+='<button class="nav-item'+(v.id===cur?' active':'')+'" data-v="'+v.id+'"><span class="idx">'+v.n+'</span><span>'+v.t+'</span></button>';
+    });
+    document.getElementById('nav').innerHTML=h;
+    document.querySelectorAll('[data-v]').forEach(function(b){
+      b.addEventListener('click',function(){ go(b.getAttribute('data-v')); });
+    });
+  }
+  function go(id){
+    cur=id; buildNav();
+    var v=VIEWS.filter(function(x){return x.id===id;})[0];
+    var el=document.getElementById('content');
+    try{ el.innerHTML=v.f(); }
+    catch(err){ el.innerHTML='<div class="panel flat"><h2>화면을 그리지 못했습니다</h2><p class="panel-note">'+esc(err.message)+'</p></div>'; return; }
+    window.scrollTo(0,0);
+    if(id==='v3'){
+      var s=document.getElementById('sevSel'), q=document.getElementById('issQ');
+      if(s) s.addEventListener('change',function(){ v3Sev=s.value; renderIssues(); });
+      if(q) q.addEventListener('input',renderIssues);
+      renderIssues();
+    }
+    if(id==='v4'){
+      var pq=document.getElementById('pQ'), pd=document.getElementById('pDept');
+      if(pq) pq.addEventListener('input',function(){ v4Sel=null; renderPeople(); });
+      if(pd) pd.addEventListener('change',function(){ v4Dept=pd.value; v4Sel=null; renderPeople(); });
+      renderPeople();
+    }
+  }
+  buildNav(); go('v0');
+})();
+</script>

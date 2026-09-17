@@ -1,0 +1,5 @@
+hr-dashboard/_preview.html
+hr-dashboard/data.js
+*.xlsx
+*.xls
+__pycache__/
