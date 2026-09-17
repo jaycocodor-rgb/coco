@@ -1,5 +1,8 @@
 hr-dashboard/_preview.html
 hr-dashboard/data.js
+analysis/taiwan.py
+analysis/extract_contract_master.py
+analysis/ot_part.py
 *.xlsx
 *.xls
 __pycache__/
