@@ -336,7 +336,7 @@
         {label:'인건비비중',num:true,render:function(r){return pct(r.인건비비중);}},
         {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}}
       ], D.byFunction));
-    h+=note('※ 「온라인물류」와 「온라인물류*」가 별도 부서로 등록되어 집계가 분리됩니다(12번 메뉴 R12). 소속이 빈 3명은 「미지정」으로 묶었습니다.');
+    h+=note('※ 「온라인물류」와 「온라인물류*」가 별도 부서로 등록되어 집계가 분리됩니다(13번 메뉴 R12). 소속이 빈 3명은 「미지정」으로 묶었습니다.');
     return h;
   }
 
@@ -885,10 +885,184 @@
     return h;
   }
 
+  /* ================= 외국인 급여대장 ================= */
+  var vfTab='급여', vfQ='';
+  function vFor(){
+    var s=D.foreignSummary, mon=D.foreignMonthly, fr=D.foreignRaise;
+    var led=D.foreignLedger, act=led.filter(function(r){return r.재직 && r.지급총액;});
+    var h=head('10. 외국인 급여대장','성명에 로마자 표기가 있는 인원 '+s.명부총원+'명의 급여·수당·인상률·인원 추이. 기준월 2026-02.',['real','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('재직 인원',s.재직+'명','전사의 '+pct(s.전체대비인원비중)+' · 명부 '+s.명부총원+'명','lead')+
+      kpi('월 급여총액',man(s.월급여총액),'전사의 '+pct(s.전체대비금액비중)+' · 연 '+eok(s.연환산))+
+      kpi('1인 평균',man(s['1인평균']),'전사 평균 '+man(s.전사1인평균)+' 대비 '+pct(s['1인평균']/s.전사1인평균-1))+
+      kpi('수당 비중',pct(s.수당비중),man(s.수당계)+' / 기본급 '+man(s.기본급계))+
+      kpi('평균 근속',s.평균근속+'년','전사 '+D.talentFacts.평균근속+'년','bad')+
+      '</div>';
+
+    h+=panel('한눈에 보기','',
+      '<div class="cards">'+[
+        ['인원의 5분의 1, 급여의 6분의 1','재직 '+s.재직+'명으로 전사 인원의 '+pct(s.전체대비인원비중)+'를 차지하지만 급여 비중은 '+
+         pct(s.전체대비금액비중)+'입니다. 1인 평균이 '+man(s['1인평균'])+'로 전사 평균보다 '+man(s.전사1인평균-s['1인평균'])+' 낮습니다.'],
+        ['평균 근속 '+s.평균근속+'년','전사 평균 '+D.talentFacts.평균근속+'년의 절반도 안 됩니다. 대부분 최근 입사자이고, '+
+         '2024-09 계약 마스터에 이름이 있는 인원은 '+fr.비교가능+'명뿐이라 인상률을 비교할 수 있는 대상 자체가 적습니다.'],
+        ['장기요양 가입제외 '+s.장기요양가입제외+'명',s.재직+'명 중 '+s.장기요양가입제외+'명이 건강보험은 내면서 장기요양보험은 0원입니다. '+
+         '외국인 가입제외 신청 대상으로 보이나, 신청서 보관 여부는 확인되지 않았습니다. 나머지 '+s.장기요양가입+'명은 정상 공제됩니다.'],
+        ['생산·물류에 집중','부서별로 보면 '+esc(D.foreignByDept[0].소속)+'('+D.foreignByDept[0].인원+'명)를 비롯해 생산·물류 라인에 몰려 있습니다. '+
+         '이 인력의 이탈은 곧 생산 차질이라, 근속이 짧다는 것이 그대로 운영 리스크입니다.']
+      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+
+    /* 1 & 5. 월별 인원수 · 입사자수 */
+    var recent=mon.slice(-26), maxN=maxOf(recent,function(m){return m.인원;});
+    h+=panel('① 월별 인원수 · ⑤ 월별 입사자수','최근 26개월. 입사일·퇴사일로 역산한 재직 인원입니다.',
+      '<div class="spark" style="height:64px;margin:4px 0 10px">'+recent.map(function(m){
+        return '<i style="height:'+Math.max(2,Math.round(m.인원/maxN*100))+'%"'+(m.입사?' class="hi"':'')+'></i>';
+      }).join('')+'</div>'+
+      '<div class="foot-note" style="padding-top:0">막대 = 월말 재직 인원 · 붉은 막대 = 그 달에 입사자가 있던 달</div>'+
+      table([
+        {label:'월',render:function(m){return m.월;}},
+        {label:'재직 인원',num:true,cls:'strong',render:function(m){return cnt(m.인원)+'명';}},
+        {label:'입사',num:true,render:function(m){return m.입사?'<b class="pos">+'+m.입사+'</b>':'<span class="muted">-</span>';}},
+        {label:'퇴사',num:true,render:function(m){return m.퇴사?'<b class="neg">-'+m.퇴사+'</b>':'<span class="muted">-</span>';}},
+        {label:'전사 대비',num:true,render:function(m){return m.월==='2026-02'?pct(m.인원/HC):'<span class="muted">-</span>';}},
+        {label:'',render:function(m){return bar(m.인원,maxN);}}
+      ], recent, '360px'));
+    h+=note('※ '+esc(D.foreignMonthlyNote));
+
+    /* 3. 수당 */
+    var AL=[['고정연장수당','고정연장수당'],['연장근로수당','연장근로수당'],['휴일특근수당','휴일특근수당'],
+            ['야근교통비','야근교통비'],['직책수당','직책수당'],['기타수당','기타수당'],
+            ['상여','상여'],['출장비','출장비'],['연차수당','연차수당']];
+    var alRows=AL.map(function(a){
+      var tot=act.reduce(function(x,r){return x+(r[a[1]]||0);},0);
+      var n=act.filter(function(r){return r[a[1]];}).length;
+      return {항목:a[0],총액:tot,수령:n,평균:n?tot/n:0,비중:tot/s.월급여총액};
+    }).filter(function(x){return x.총액;}).sort(function(a,b){return b.총액-a.총액;});
+    h+=panel('③ 수당 현황','기본급 '+man(s.기본급계)+' 외 수당 '+man(s.수당계)+'('+pct(s.수당비중)+')의 항목별 내역입니다.',
+      table([
+        {label:'항목',render:function(r){return esc(r.항목);}},
+        {label:'월 총액',num:true,render:function(r){return won(r.총액);}},
+        {label:'급여 대비',num:true,render:function(r){return pct(r.비중);}},
+        {label:'수령 인원',num:true,render:function(r){return cnt(r.수령)+'명';}},
+        {label:'수령률',num:true,render:function(r){return pct(r.수령/s.재직);}},
+        {label:'1인평균',num:true,cls:'strong',render:function(r){return won(r.평균);}},
+        {label:'',render:function(r){return bar(r.총액,maxOf(alRows,function(x){return x.총액;}));}}
+      ], alRows));
+
+    /* 4. 인상률 */
+    h+=panel('④ 인상률','2024-09 → 2026-02 계약급여 기준, 연환산(매년) 인상률입니다.',
+      '<div class="kpi-row" style="margin-bottom:10px">'+
+        kpi('비교 가능',fr.비교가능+'명','재직 '+s.재직+'명 중 · 나머지는 2024-09 이후 입사')+
+        kpi('중위 연환산',spct(fr.중위연환산),'전사 중위 '+pct(fr.전사중위))+
+        kpi('평균 연환산',spct(fr.평균연환산),'')+
+      '</div>'+
+      table([
+        {label:'등급',render:function(r){return gradeChip(r.등급);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'비중',num:true,render:function(r){return fr.비교가능?pct(r.인원/fr.비교가능):'-';}},
+        {label:'',render:function(r){return bar(r.인원,maxOf(fr.등급분포,function(x){return x.인원;}));}}
+      ], fr.등급분포));
+    h+=note('※ 외국인 인력 대부분이 2024-09 이후 입사라 인상률 비교 대상이 '+fr.비교가능+'명뿐입니다. '+
+      '이 수치는 표본이 작아 전사 중위값과 직접 비교하기 어렵습니다.');
+
+    /* 부서별 */
+    h+=panel('부서별 배치','',table([
+        {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'월 급여',num:true,render:function(r){return won(r.지급총액);}},
+        {label:'1인평균',num:true,cls:'strong',render:function(r){return won(r['1인평균']);}},
+        {label:'수당계',num:true,render:function(r){return won(r.수당계);}},
+        {label:'수당비중',num:true,render:function(r){return pct(r.수당비중);}},
+        {label:'연장시간',num:true,render:function(r){return Math.round(r.연장시간)+'h';}},
+        {label:'',render:function(r){return bar(r.지급총액,maxOf(D.foreignByDept,function(x){return x.지급총액;}));}}
+      ], D.foreignByDept));
+
+    /* 2 & 6. 개인별 대장 */
+    var TABS=[['급여','② 급여 (총급여 내림차순)'],['수당','③ 수당 상세'],['인상','④ 인상률'],['공제','4대보험 공제']];
+    h+='<div class="searchbar">'+TABS.map(function(t){
+      return '<button class="nav-item'+(vfTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vf="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+    h+='<div class="searchbar"><input id="vfq" type="search" placeholder="이름·부서 검색" value="'+esc(vfQ)+'"></div><div id="vftbl"></div>';
+    h+=note('※ '+esc(s.식별기준)+' 원본 급여대장에 국적·체류자격 항목이 없어, 비자 종류(E-9/H-2/F-4 등)별 구분은 할 수 없습니다. '+
+      '장기요양 가입제외 여부가 사실상 유일한 간접 신호입니다.');
+    return h;
+  }
+  function renderForeign(){
+    var el=document.getElementById('vftbl'); if(!el) return;
+    var q=vfQ.trim().toLowerCase();
+    var rows=D.foreignLedger.filter(function(r){
+      if(!q) return true;
+      return (r.성명+' '+r.소속+' '+(r.직원번호||'')).toLowerCase().indexOf(q)>=0;
+    });
+    var base=[
+      {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+      {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+      {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+      {label:'상태',render:function(r){return r.재직?'<span class="tag real">재직</span>':'<span class="tag part">'+esc(r.재직상태)+'</span>';}}
+    ];
+    var cols,title,noteTxt;
+    if(vfTab==='급여'){
+      title='② 급여 · ⑥ 총급여 지급액 내림차순';
+      noteTxt='2026-02 지급총액 기준 내림차순입니다. 급여대장에 없는 인원은 하단에 표시됩니다.';
+      cols=base.concat([
+        {label:'입사일',render:function(r){return dash(r.입사일);}},
+        {label:'근속',num:true,render:function(r){return r.근속년수===null||r.근속년수===undefined?'<span class="muted">-</span>':r.근속년수+'년';}},
+        {label:'기본급',num:true,render:function(r){return dash(r.기본급,won);}},
+        {label:'수당계',num:true,render:function(r){return dash(r.수당계,won);}},
+        {label:'지급총액',num:true,cls:'strong',render:function(r){return dash(r.지급총액,won);}},
+        {label:'공제총액',num:true,render:function(r){return dash(r.공제총액,won);}},
+        {label:'실지급액',num:true,render:function(r){return dash(r.실지급액,won);}},
+        {label:'연환산',num:true,render:function(r){return r.지급총액?man(r.지급총액*12):'<span class="muted">-</span>';}},
+        {label:'',render:function(r){return r.지급총액?bar(r.지급총액,maxOf(rows,function(x){return x.지급총액||0;})):'';}}
+      ]);
+    } else if(vfTab==='수당'){
+      title='③ 수당 상세'; noteTxt='기본급을 제외한 항목별 지급액입니다.';
+      cols=base.concat([
+        {label:'고정연장',num:true,render:function(r){return dash(r.고정연장수당,won);}},
+        {label:'연장근로',num:true,render:function(r){return dash(r.연장근로수당,won);}},
+        {label:'연장시간',num:true,render:function(r){return r.연장시간?r.연장시간+'h':'<span class="muted">-</span>';}},
+        {label:'휴일특근',num:true,render:function(r){return dash(r.휴일특근수당,won);}},
+        {label:'휴일일수',num:true,render:function(r){return r.휴일근무일수?r.휴일근무일수+'일':'<span class="muted">-</span>';}},
+        {label:'야근교통비',num:true,render:function(r){return dash(r.야근교통비,won);}},
+        {label:'기타수당',num:true,render:function(r){return dash(r.기타수당,won);}},
+        {label:'연차수당',num:true,render:function(r){return dash(r.연차수당,won);}},
+        {label:'수당계',num:true,cls:'strong',render:function(r){return dash(r.수당계,won);}},
+        {label:'급여대비',num:true,render:function(r){return r.지급총액?pct(r.수당계/r.지급총액):'<span class="muted">-</span>';}}
+      ]);
+    } else if(vfTab==='인상'){
+      title='④ 인상률 (2024-09 → 2026-02)';
+      noteTxt='2024-09 계약 마스터에 없는 인원(그 이후 입사)은 비교가 불가능합니다.';
+      cols=base.concat([
+        {label:'입사일',render:function(r){return dash(r.입사일);}},
+        {label:'2024-09',num:true,render:function(r){return dash(r.계약_2024_09,won);}},
+        {label:'2025-07',num:true,render:function(r){return dash(r.계약_2025_07,won);}},
+        {label:'2026-02',num:true,cls:'strong',render:function(r){return dash(r.계약_2026_02,won);}},
+        {label:'누적 인상률',num:true,render:function(r){return spct(r.누적인상률);}},
+        {label:'연환산(매년)',num:true,cls:'strong',render:function(r){return spct(r.연환산인상률);}},
+        {label:'등급',render:function(r){return gradeChip(r.등급);}}
+      ]);
+    } else {
+      title='4대보험 공제';
+      noteTxt='장기요양 「가입제외」는 건강보험은 공제되는데 장기요양이 0원인 경우입니다. 외국인 가입제외 신청 대상으로 보이나 신청서 확인이 필요합니다.';
+      cols=base.concat([
+        {label:'과세합계',num:true,render:function(r){return dash(r.과세합계,won);}},
+        {label:'국민연금',num:true,render:function(r){return dash(r.국민연금,won);}},
+        {label:'건강보험',num:true,render:function(r){return dash(r.건강보험,won);}},
+        {label:'장기요양',num:true,render:function(r){return r.장기요양?won(r.장기요양):(r.재직?'<b class="neg">0원</b>':'<span class="muted">-</span>');}},
+        {label:'장기요양 가입',render:function(r){
+          if(!r.장기요양가입) return '<span class="muted">-</span>';
+          return r.장기요양가입==='가입제외'?'<span class="sev 참고">가입제외</span>':'<span class="tag real">가입</span>';}},
+        {label:'고용보험',num:true,render:function(r){return dash(r.고용보험,won);}},
+        {label:'공제총액',num:true,cls:'strong',render:function(r){return dash(r.공제총액,won);}},
+        {label:'공제율',num:true,render:function(r){return r.지급총액?pct(r.공제총액/r.지급총액):'<span class="muted">-</span>';}}
+      ]);
+    }
+    el.innerHTML=panel(title+' ('+rows.length+'명)',noteTxt,table(cols,rows,'560px'));
+  }
+
   /* ================= 10. 복리후생비 ================= */
   function v10(){
     var w=D.welfare;
-    var h=head('10. 복리후생비 사용현황','㈜코코도르 손익계산서(판매비와관리비) 기준. 제조 인건비는 매출원가에 있어 여기 없습니다.',['part','연간·월평균']);
+    var h=head('11. 복리후생비 사용현황','㈜코코도르 손익계산서(판매비와관리비) 기준. 제조 인건비는 매출원가에 있어 여기 없습니다.',['part','연간·월평균']);
     h+='<div class="kpi-row">'+
       kpi('복리후생비 2024',man(w.복리후생비_2024),'월평균 '+man(w.복리후생비_월평균_2024))+
       kpi('복리후생비 2025',man(w.복리후생비_2025_9M),'1~9월 · 월평균 '+man(w.복리후생비_월평균_2025))+
@@ -921,7 +1095,7 @@
 
   /* ================= 11. 매출 대비 인건비 ================= */
   function v11(){
-    var h=head('11. 매출 대비 인건비 · 최근 5년','인건비율 추이입니다. 연도별 매출 기준이 달라 같은 기준 안에서만 비교해야 합니다.',['part','기준 혼재']);
+    var h=head('12. 매출 대비 인건비 · 최근 5년','인건비율 추이입니다. 연도별 매출 기준이 달라 같은 기준 안에서만 비교해야 합니다.',['part','기준 혼재']);
     var y23=D.yearly[0], y24=D.yearly[1];
     h+='<div class="kpi-row">'+
       kpi('2023 인건비율',pct(y23.인건비율),eok(y23.인건비)+' / '+eok(y23.매출))+
@@ -961,7 +1135,7 @@
   var v12Sev='전체';
   function v12(){
     var crit=D.issues.filter(function(i){return i.심각도==='치명';});
-    var h=head('12. 급여 · 수당 오류 검증','17개 검증 규칙을 154명 전원에 적용했습니다. 합계·요율 산식은 모두 통과했고, 실제 미스는 가입·마스터 데이터에 몰려 있습니다.',['real','전수검증']);
+    var h=head('13. 급여 · 수당 오류 검증','17개 검증 규칙을 154명 전원에 적용했습니다. 합계·요율 산식은 모두 통과했고, 실제 미스는 가입·마스터 데이터에 몰려 있습니다.',['real','전수검증']);
     h+='<div class="kpi-row">'+
       kpi('검증 규칙',D.rules.length+'개','154명 × 전 항목')+
       kpi('치명',crit.length+'건','즉시 조치','bad')+
@@ -1010,7 +1184,7 @@
   /* ================= 13. 조직 구조 ================= */
   function v13(){
     var oc=D.orgChart;
-    var h=head('13. 미래 조직 구조 · 조직도','2024-10-30 조직도와 2026-02 실측 인원을 대조하고, 다음 구조를 제안합니다.',['part','실측+제안']);
+    var h=head('14. 미래 조직 구조 · 조직도','2024-10-30 조직도와 2026-02 실측 인원을 대조하고, 다음 구조를 제안합니다.',['part','실측+제안']);
     h+='<div class="kpi-row">'+
       kpi('현 부서 수',D.byDept.length+'개','부서당 평균 '+(HC/D.byDept.length).toFixed(1)+'명')+
       kpi('개편 이동 인원',D.orgMoves.length+'명','2025-07 → 2026-02','lead')+
@@ -1073,7 +1247,7 @@
 
   /* ================= 14. 절감 ================= */
   function v14(){
-    var h=head('14. 인건비 절감 방안','한국 월 인건비 '+man(TOT)+'(연 '+eok(D.costBase.연환산)+') 기준 6개 과제입니다.',['plan','정량 추정']);
+    var h=head('15. 인건비 절감 방안','한국 월 인건비 '+man(TOT)+'(연 '+eok(D.costBase.연환산)+') 기준 6개 과제입니다.',['plan','정량 추정']);
     h+='<div class="kpi-row">'+
       kpi('연 절감 가능액',eok(D.savingsTotal),'연환산 인건비의 '+pct(D.savingsTotal/D.costBase.연환산),'lead')+
       kpi('즉시 실행 가능',eok(D.savings.filter(function(s){return s.난이도==='하';}).reduce(function(a,s){return a+s.연절감액;},0)),'난이도 하')+
@@ -1098,7 +1272,7 @@
   /* ================= 15. 육성 ================= */
   function v15(){
     var t=D.talentFacts, w=D.welfare;
-    var h=head('15. 인재 육성 전략','근속 3년 미만이 '+t.근속3년미만+'명('+pct(t.근속3년미만/HC)+')이고 교육훈련비는 1인당 연 '+won(w['교육훈련_1인당_2024'])+'입니다.',['plan','제안']);
+    var h=head('16. 인재 육성 전략','근속 3년 미만이 '+t.근속3년미만+'명('+pct(t.근속3년미만/HC)+')이고 교육훈련비는 1인당 연 '+won(w['교육훈련_1인당_2024'])+'입니다.',['plan','제안']);
     h+='<div class="kpi-row">'+
       kpi('근속 1년 미만',t.근속1년미만+'명',pct(t.근속1년미만/HC),'bad')+
       kpi('근속 3년 미만',t.근속3년미만+'명',pct(t.근속3년미만/HC))+
@@ -1111,17 +1285,17 @@
        '30/60/90일 면담을 의무화하고 부서별 멘토를 지정합니다. 90일 잔존율을 인사 KPI로 관리합니다.',
        '분기별 90일 잔존율 · 부서별 조기이직 건수'],
       ['교육 예산 정상화','2024년 교육훈련비 '+man(w.교육훈련비_2024)+'(1인당 '+won(w['교육훈련_1인당_2024'])+'), 2025년 9개월 '+man(w.교육훈련비_2025_9M)+'로 68% 감소했습니다.',
-       '1인당 연 50만원(총 '+man(HC*500000)+') 수준으로 복원하고, 14번 절감 과제의 절감액 일부를 재원으로 씁니다. 직무별 필수 과정을 지정해 소진율을 관리합니다.',
+       '1인당 연 50만원(총 '+man(HC*500000)+') 수준으로 복원하고, 15번 절감 과제의 절감액 일부를 재원으로 씁니다. 직무별 필수 과정을 지정해 소진율을 관리합니다.',
        '1인당 교육비 · 과정 이수율 · 교육 후 3개월 잔존율'],
       ['생산·물류 숙련 등급제','인원의 '+pct(t.생산물류비중)+'가 생산·물류이고 1인평균 급여는 '+
        man(D.byFunction.filter(function(f){return f.기능==='생산·물류';})[0]['1인평균'])+'로 전사 평균 '+man(t['1인평균'])+'보다 낮습니다.',
        '숙련도를 3등급(기본·숙련·다기능)으로 정의하고 등급별 수당을 신설합니다. 연장근로로 소득을 보전하는 구조를 숙련 보상으로 전환합니다.',
        '등급 취득자 수 · 다기능 비율 · 해당 부서 연장수당 감소액'],
       ['외국인 인력 정착 프로그램',t.외국인추정+'명('+pct(t.외국인추정/HC)+')이 외국 국적 추정이며 음성·용인 생산과 물류에 집중되어 있습니다.',
-       '한국어·안전교육 정기 과정, 통역 가능한 반장 배치, 급여명세 다국어 안내를 운영합니다. 12번에서 나온 장기요양 가입제외 21건 안내도 이 채널로 처리합니다.',
+       '한국어·안전교육 정기 과정, 통역 가능한 반장 배치, 급여명세 다국어 안내를 운영합니다. 13번에서 나온 장기요양 가입제외 21건 안내도 이 채널로 처리합니다.',
        '외국인 1년 잔존율 · 안전사고 건수 · 급여 문의 건수'],
       ['파트장·반장 리더십 과정','직책 보유자가 '+t.직책보유+'명, 관리 스팬 1:'+(HC/t.직책보유).toFixed(1)+'입니다. 중간관리자 공백이 조기이직의 직접 원인입니다.',
-       '파트장·반장 대상 분기 1회 과정(면담 기법·근태 관리·연장근로 승인 기준)을 운영합니다. 14번의 연장 사전승인제와 같은 과정에서 교육합니다.',
+       '파트장·반장 대상 분기 1회 과정(면담 기법·근태 관리·연장근로 승인 기준)을 운영합니다. 15번의 연장 사전승인제와 같은 과정에서 교육합니다.',
        '이수율 · 담당 부서 90일 잔존율 · 사전승인 준수율'],
       ['핵심인력 지식 승계','근속 10년 이상 '+t.근속10년이상+'명이 보유한 공정·거래처 지식이 문서화되어 있지 않습니다.',
        '직무별 핵심 지식을 문서화하고 후임 1명을 지정해 6개월 병행 수행합니다. 대상자에게 승계 수당을 지급합니다.',
@@ -1136,7 +1310,7 @@
   /* ================= 16. 복리후생 강화 ================= */
   function v16(){
     var w=D.welfare, mealCost=HC*200000;
-    var h=head('16. 복리후생 강화 전략','복리후생비는 줄고 식대 비과세 한도는 쓰지 않고 있습니다. 같은 비용으로 실수령을 올릴 여지가 큽니다.',['plan','제안']);
+    var h=head('17. 복리후생 강화 전략','복리후생비는 줄고 식대 비과세 한도는 쓰지 않고 있습니다. 같은 비용으로 실수령을 올릴 여지가 큽니다.',['plan','제안']);
     h+='<div class="kpi-row">'+
       kpi('현 식대 지급',won(D.talentFacts.식대),'154명 전원 0원','bad')+
       kpi('식대 비과세 한도',won(200000)+'/월','1인당 · 전액 미활용')+
@@ -1146,11 +1320,11 @@
       '</div>';
     h+='<div class="cards">'+[
       ['1순위 · 식대 비과세 전환','즉시','현재 식대가 0원이므로 기본급 일부를 식대로 재배분하면 회사 부담 증가 없이 과세소득이 월 20만원 줄어듭니다. 소득세·4대보험료가 함께 줄어 회사 부담분도 감소합니다. 기본급 감소는 불이익변경이므로 신규 입사자부터 적용하거나 인상분을 식대로 배정하는 방식이 안전합니다.'],
-      ['2순위 · 성과 상여 제도화','1분기','현재 상여를 받은 사람은 1명뿐입니다. 연장수당으로 소득을 보전하는 구조 대신 부서 목표 달성 시 지급하는 반기 상여를 신설하면 14번(연장 축소)의 보상 공백을 메울 수 있습니다.'],
+      ['2순위 · 성과 상여 제도화','1분기','현재 상여를 받은 사람은 1명뿐입니다. 연장수당으로 소득을 보전하는 구조 대신 부서 목표 달성 시 지급하는 반기 상여를 신설하면 15번(연장 축소)의 보상 공백을 메울 수 있습니다.'],
       ['3순위 · 장기근속 포상','2분기','근속 10년 이상이 '+D.talentFacts.근속10년이상+'명뿐이고 3년 미만이 '+pct(D.talentFacts.근속3년미만/HC)+'입니다. 3년·5년·10년 시점 포상(휴가+포상금)을 제도화해 3년 벽을 넘도록 설계합니다.'],
       ['4순위 · 통근·기숙 지원','2분기','야근교통비가 월 '+won(D.costBase.야근교통비)+'로 28명에게만 지급됩니다. 급여대장 비고에 기숙사이용료 공제가 18명 있습니다. 음성·용인·고성 통근 여건을 실사해 통근버스 또는 기숙 지원으로 전환하면 외국인 '+D.talentFacts.외국인추정+'명의 정착률에 직접 영향을 줍니다.'],
       ['5순위 · 건강검진·단체보험','3분기','생산·물류가 '+pct(D.talentFacts.생산물류비중)+'로 산업재해 노출이 큰 구조입니다. 법정 검진 외 종합검진과 단체상해보험은 비용 대비 체감도가 높습니다.'],
-      ['재원 · 14번 절감액 재투자','연중','14번 절감 과제의 연 '+eok(D.savingsTotal)+' 중 일부를 복리후생 재원으로 돌리면 총 인건비를 늘리지 않고 체감 처우를 개선할 수 있습니다. 연장수당을 줄이고 복리후생으로 전환하는 것이 이 전략의 핵심입니다.']
+      ['재원 · 15번 절감액 재투자','연중','15번 절감 과제의 연 '+eok(D.savingsTotal)+' 중 일부를 복리후생 재원으로 돌리면 총 인건비를 늘리지 않고 체감 처우를 개선할 수 있습니다. 연장수당을 줄이고 복리후생으로 전환하는 것이 이 전략의 핵심입니다.']
     ].map(function(c){
       return '<div class="card"><div class="eyebrow">'+c[1]+'</div><h3>'+c[0]+'</h3><p>'+c[2]+'</p></div>';
     }).join('')+'</div>';
@@ -1161,7 +1335,7 @@
   /* ================= 17. 인재 확보 ================= */
   function v17(){
     var t=D.talentFacts, ex=D.exitAnalysis;
-    var h=head('17. 인재 확보 전략','확인된 연환산 이직률이 '+pct(ex['2025_연환산이직률'])+'입니다. 문제는 확보가 아니라 유지입니다.',['plan','제안']);
+    var h=head('18. 인재 확보 전략','확인된 연환산 이직률이 '+pct(ex['2025_연환산이직률'])+'입니다. 문제는 확보가 아니라 유지입니다.',['plan','제안']);
     h+='<div class="kpi-row">'+
       kpi('연환산 이직률',pct(ex['2025_연환산이직률']),'2025년 확인분 기준','bad')+
       kpi('퇴사자 평균근속',ex.계약마스터_평균근속+'년','1년 내 퇴사 '+ex.계약마스터_1년내+'명')+
@@ -1171,15 +1345,15 @@
       '</div>';
     h+='<div class="steps">'+[
       ['채용 전 이탈 원인부터 막는다','1년 미만 '+t.근속1년미만+'명, 3년 미만 '+t.근속3년미만+'명. 퇴사자 평균 근속이 '+ex.계약마스터_평균근속+'년이고 1년 내 퇴사가 '+ex.계약마스터_1년내+'명입니다.',
-       '15번의 90일 온보딩을 먼저 가동하고, 퇴사자 전원 면담(Exit Interview)을 의무화해 부서별 이탈 사유를 데이터로 축적합니다. 채용 확대는 그 다음입니다.'],
-      ['D등급 부서부터 처우를 손본다','6번 등급 분석에서 D(연환산 2% 미만·동결) 비중이 높은 부서가 이탈 위험이 가장 큽니다. 17개월간 인상이 없던 인원이 '+D.frozen.length+'명입니다.',
+       '16번의 90일 온보딩을 먼저 가동하고, 퇴사자 전원 면담(Exit Interview)을 의무화해 부서별 이탈 사유를 데이터로 축적합니다. 채용 확대는 그 다음입니다.'],
+      ['D등급 부서부터 처우를 손본다','7번 등급 분석에서 D(연환산 2% 미만·동결) 비중이 높은 부서가 이탈 위험이 가장 큽니다. 17개월간 인상이 없던 인원이 '+D.frozen.length+'명입니다.',
        'D 비중 상위 부서를 대상으로 시장 대비 급여 수준을 점검하고, 근속 3년 이상 동결자부터 조정합니다. 동결이 의도된 것인지 방치된 것인지부터 구분해야 합니다.'],
       ['생산·물류 채용 채널 이원화','생산·물류가 인원의 '+pct(t.생산물류비중)+'이고 외국인이 '+t.외국인추정+'명입니다. 이 인력의 안정 공급이 사업 연속성과 직결됩니다.',
        '① 외국인: E-9/H-2 쿼터 일정에 맞춘 연간 채용계획, 재직자 추천 보상제. ② 내국인: 음성·용인·고성 지역 채널(고용센터·특성화고)을 별도 관리합니다.'],
       ['경력직은 직무 단위로 좁혀서 뽑는다','3명 이하 부서가 '+D.byDept.filter(function(d){return d.인원<=3;}).length+'개로 대체 불가능한 1인 기능이 다수입니다.',
-       '오일연구소·품질·CX 등 소규모 핵심 기능은 결원 발생 후가 아니라 상시 후보군을 유지합니다. 13번 4본부 체제로 통합하면 본부 내 대체 배치도 가능해집니다.'],
+       '오일연구소·품질·CX 등 소규모 핵심 기능은 결원 발생 후가 아니라 상시 후보군을 유지합니다. 14번 4본부 체제로 통합하면 본부 내 대체 배치도 가능해집니다.'],
       ['보상 경쟁력을 연장수당이 아닌 계약급여로','현재 소득의 '+pct(D.costBase.연장수당총계/TOT)+'가 연장수당입니다. 지원자에게는 "기본급이 낮은 회사"로 보입니다.',
-       '채용 공고 제시 금액을 계약급여(기본급+고정연장) 기준으로 명확히 하고, 14번으로 줄인 변동수당을 계약급여로 이전해 제시 경쟁력을 높입니다.'],
+       '채용 공고 제시 금액을 계약급여(기본급+고정연장) 기준으로 명확히 하고, 15번으로 줄인 변동수당을 계약급여로 이전해 제시 경쟁력을 높입니다.'],
       ['추천 채용 보상제','재직자 추천은 조기이직률이 가장 낮은 채널이고, 외국인 '+t.외국인추정+'명의 네트워크가 이미 존재합니다.',
        '추천 입사자가 6개월 근속 시 추천인·입사자 모두에게 보상합니다. 1인 대체비용 '+man(4500000)+' 대비 저비용 채널입니다.']
     ].map(function(s,i){
@@ -1194,15 +1368,15 @@
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
-      ['00.코코도르 외 급여_2026.02.xlsx','2026-02 급여대장 154명(지급 16·공제 14항목), 직원명부 165명, 연장·출장 개인별','사용','1·3·4·5·7·8·12번'],
-      ['전사 급여내역_25.01.01 / 24.12.31 / 25.04.28.xlsx','계약 마스터 2024-09-30 — 계약연봉·월급여·고정연장시수·제조/판관·정규직/기간제·퇴사자','사용(암호 해제)','1·6·7·9번'],
-      ['2508 급여.xlsx','2025-07 계약급여, 2025-06 집계 시트','사용','3·5·6번'],
-      ['2506 인건비통합 3년간 비용.xlsx','2023-01~2025-05 월별 인건비·매출, 항목별 집계','사용','3·11번'],
+      ['00.코코도르 외 급여_2026.02.xlsx','2026-02 급여대장 154명(지급 16·공제 14항목), 직원명부 165명, 연장·출장 개인별','사용','1·3·4·5·7·8·10·13번'],
+      ['전사 급여내역_25.01.01 / 24.12.31 / 25.04.28.xlsx','계약 마스터 2024-09-30 — 계약연봉·월급여·고정연장시수·제조/판관·정규직/기간제·퇴사자','사용(암호 해제)','1·6·7·9·10번'],
+      ['2508 급여.xlsx','2025-07 계약급여, 2025-06 집계 시트','사용','3·5·6·10번'],
+      ['2506 인건비통합 3년간 비용.xlsx','2023-01~2025-05 월별 인건비·매출, 항목별 집계','사용','3·12번'],
       ['260301 대만 급여.xlsx','대만법인 15명 2026-01 급여·회사부담 4대보험','사용','2번'],
-      ['손익계산서_2509.xlsx','2024년/2025년 1~9월 판관비 — 복리후생비·교육훈련비·퇴직급여','사용','10번'],
-      ['조직도현황_24.10.30.xlsx','코코도르 22개 부서·코팜 원예 조직도, 휴직자·입퇴사자','사용','13번'],
+      ['손익계산서_2509.xlsx','2024년/2025년 1~9월 판관비 — 복리후생비·교육훈련비·퇴직급여','사용','11번'],
+      ['조직도현황_24.10.30.xlsx','코코도르 22개 부서·코팜 원예 조직도, 휴직자·입퇴사자','사용','14번'],
       ['근태·연차 사용대장','월차·반차 사용일수','미확보','8번 — 원본 없음'],
-      ['인사평가 점수','성과평가 등급','미확보','6번 A/B/C/D는 인상률 기반 대체']
+      ['인사평가 점수','성과평가 등급','미확보','7번 A/B/C/D는 인상률 기반 대체']
     ];
     h+=panel('사용한 원본 파일','',table([
       {label:'파일',render:function(r){return '<b>'+esc(r[0])+'</b>';}},
@@ -1257,14 +1431,15 @@
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
-    {id:'v10',n:'10',t:'복리후생비 사용현황',        g:'비용', f:v10},
-    {id:'v11',n:'11',t:'매출 대비 인건비 · 5년',     g:'비용', f:v11},
-    {id:'v12',n:'12',t:'급여 · 수당 오류 검증',      g:'검증', f:v12},
-    {id:'v13',n:'13',t:'미래 조직 구조 · 조직도',    g:'전략 설계', f:v13},
-    {id:'v14',n:'14',t:'인건비 절감 방안',          g:'전략 설계', f:v14},
-    {id:'v15',n:'15',t:'인재 육성 전략',            g:'전략 설계', f:v15},
-    {id:'v16',n:'16',t:'복리후생 강화 전략',        g:'전략 설계', f:v16},
-    {id:'v17',n:'17',t:'인재 확보 전략',            g:'전략 설계', f:v17},
+    {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
+    {id:'v10',n:'11',t:'복리후생비 사용현황',        g:'비용', f:v10},
+    {id:'v11',n:'12',t:'매출 대비 인건비 · 5년',     g:'비용', f:v11},
+    {id:'v12',n:'13',t:'급여 · 수당 오류 검증',      g:'검증', f:v12},
+    {id:'v13',n:'14',t:'미래 조직 구조 · 조직도',    g:'전략 설계', f:v13},
+    {id:'v14',n:'15',t:'인건비 절감 방안',          g:'전략 설계', f:v14},
+    {id:'v15',n:'16',t:'인재 육성 전략',            g:'전략 설계', f:v15},
+    {id:'v16',n:'17',t:'복리후생 강화 전략',        g:'전략 설계', f:v16},
+    {id:'v17',n:'18',t:'인재 확보 전략',            g:'전략 설계', f:v17},
     {id:'v18',n:'·', t:'데이터 출처 및 한계',        g:'부록', f:v18}
   ];
   var cur='v0';
@@ -1306,6 +1481,14 @@
       if(gs) gs.addEventListener('change',function(){ v6Grade=gs.value; renderGrade(); });
       if(gq) gq.addEventListener('input',function(){ v6Q=gq.value; renderGrade(); });
       renderGrade();
+    }
+    if(id==='vfor'){
+      document.querySelectorAll('[data-vf]').forEach(function(b){
+        b.addEventListener('click',function(){ vfTab=b.getAttribute('data-vf'); go('vfor'); });
+      });
+      var fq=document.getElementById('vfq');
+      if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
+      renderForeign();
     }
     if(id==='v12'){
       var s=document.getElementById('sevSel'), iq=document.getElementById('issQ');
