@@ -1408,6 +1408,124 @@
       ], rows, '520px', function(r){return 'stripe-'+r.심각도;}));
   }
 
+  /* ================= 조직도 도식 (SVG) ================= */
+  var ORG_ACCENT={'영업':'var(--fn-sales)','지원':'var(--fn-admin)','연구':'var(--fn-rnd)','SCM':'var(--fn-prod)'};
+  function oPay(name){
+    var r=(D.orgNow.부서급여||[]).filter(function(x){return x.부서===name;})[0];
+    return r&&r.매핑?r:null;
+  }
+  function oUnit(name){
+    return (D.orgNow.본부급여||[]).filter(function(x){return x.본부===name;})[0];
+  }
+  function oHead(name){   /* 조직도 표기 인원 (본부장 포함) */
+    var u=(D.orgNowUnits||[]).filter(function(x){return x.본부===name;})[0];
+    return u?u.인원:0;
+  }
+  /* 박스 하나: 제목 / 인원 / 급여 */
+  function oBox(x,y,w,h,title,n,pay,accent,lead){
+    var cx=x+w/2, t='';
+    t+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="7" fill="var(--surface)" stroke="currentColor" stroke-opacity=".28"/>';
+    t+='<rect x="'+x+'" y="'+y+'" width="4.5" height="'+h+'" rx="2" fill="'+accent+'"/>';
+    t+='<text x="'+cx+'" y="'+(y+19)+'" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">'+esc(title)+'</text>';
+    if(lead) t+='<text x="'+cx+'" y="'+(y+33)+'" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity=".6">'+esc(lead)+'</text>';
+    var ny=lead?(y+50):(y+38);
+    t+='<text x="'+cx+'" y="'+ny+'" text-anchor="middle" font-size="15" font-weight="600" fill="currentColor" font-family="IBM Plex Mono, monospace">'+n+'명</text>';
+    if(pay!==null&&pay!==undefined)
+      t+='<text x="'+cx+'" y="'+(ny+15)+'" text-anchor="middle" font-size="10.5" fill="'+accent+'" font-family="IBM Plex Mono, monospace">'+man(pay)+'</text>';
+    else
+      t+='<text x="'+cx+'" y="'+(ny+15)+'" text-anchor="middle" font-size="10" fill="currentColor" fill-opacity=".38">급여 미매핑</text>';
+    return t;
+  }
+  function oLine(x1,y1,x2,y2){
+    return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="currentColor" stroke-opacity=".3" stroke-width="1.3"/>';
+  }
+  function oFig(vb,inner,caption,label){
+    return '<figure style="margin:0 0 14px">'+
+      '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:10px 12px">'+
+      '<svg role="img" aria-label="'+esc(label)+'" viewBox="'+vb+'" style="width:100%;min-width:640px;height:auto;color:var(--ink)">'+
+      inner+'</svg></div>'+
+      '<figcaption style="font-size:11px;color:var(--ink-3);padding:6px 2px 0;max-width:88ch">'+caption+'</figcaption></figure>';
+  }
+
+  function orgSvgAll(){
+    var ON=D.orgNow, T=ON.총원, h='';
+
+    /* ── 도식 1: 전사 본부 구조 ── */
+    var TOP=[{n:'전략영업팀',k:'영업',lead:'정지원'},{n:'SCM팀',k:'SCM',lead:'김보희'},
+             {n:'영업3',k:'영업',lead:'정윤교'},{n:'구매',k:'지원',lead:'박선희'},
+             {n:'재무/인사',k:'지원',lead:null},{n:'영업2',k:'영업',lead:'이정근'},
+             {n:'해외B2B',k:'영업',lead:'한미애'},{n:'CX',k:'영업',lead:null},
+             {n:'디자인연구소',k:'연구',lead:null},{n:'오일연구소',k:'연구',lead:null},
+             {n:'기획',k:'지원',lead:null},{n:'총무',k:'지원',lead:'박선희(겸)'}];
+    var W=180,G=16,X0=40,s='';
+    function colX(i){ return X0+(i%6)*(W+G); }
+    s+='<rect x="480" y="16" width="180" height="52" rx="7" fill="var(--surface)" stroke="currentColor" stroke-opacity=".28"/>';
+    s+='<rect x="480" y="16" width="4.5" height="52" rx="2" fill="var(--accent)"/>';
+    s+='<text x="570" y="37" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">대표이사</text>';
+    s+='<text x="570" y="55" text-anchor="middle" font-size="12.5" fill="currentColor" fill-opacity=".8">'+esc(ON.대표이사)+'</text>';
+    s+='<rect x="700" y="16" width="200" height="52" rx="7" fill="var(--surface-alt)" stroke="currentColor" stroke-opacity=".28"/>';
+    s+='<text x="800" y="37" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">이사</text>';
+    s+='<text x="800" y="54" text-anchor="middle" font-size="11" fill="currentColor" fill-opacity=".7">'+ON.이사.map(esc).join(' · ')+'</text>';
+    s+=oLine(660,42,700,42);
+    s+=oLine(570,68,570,96)+oLine(60,96,1180,96);
+    s+=oLine(60,96,60,206)+oLine(60,206,1180,206);
+    TOP.forEach(function(u,i){
+      var x=colX(i), row=Math.floor(i/6), by=row?226:126, busy=row?206:96;
+      var uu=oUnit(u.n)||{};
+      s+=oLine(x+W/2,busy,x+W/2,by);
+      s+=oBox(x,by,W,74,u.n,oHead(u.n),(uu.급여인원?uu.급여총액:null),ORG_ACCENT[u.k],u.lead);
+    });
+    h+=oFig('0 0 1240 330',s,
+      '대표이사 아래 12개 본부. 박스의 숫자는 조직도 표기 인원, 그 아래는 2026-02 급여대장에서 대응 소속을 찾아 합산한 월 급여입니다. '+
+      '영업1~4처럼 2월 이후 개편돼 대응 소속을 특정할 수 없는 곳은 「급여 미매핑」으로 뒀습니다.',
+      '코코도르 전사 조직도 — 대표이사 아래 12개 본부, 총원 '+T.전체+'명');
+
+    /* ── 도식 2: SCM팀 ── */
+    var g2='';
+    var GRP=[{n:'관리',cx:200,cnt:ON.그룹표기.관리,dept:[['본사SCM',130],['음성SCM',280]]},
+             {n:'물류',cx:700,cnt:ON.그룹표기.물류,dept:[['본사물류',469],['온라인물류',623],['음성물류',777],['포장',931]]},
+             {n:'생산',cx:1240,cnt:ON.그룹표기.생산,dept:[['음성생산',1240]]}];
+    var scm=oUnit('SCM팀')||{};
+    g2+=oBox(620,16,200,56,'SCM팀',oHead('SCM팀'),scm.급여인원?scm.급여총액:null,ORG_ACCENT.SCM,'김보희');
+    g2+=oLine(720,72,720,100)+oLine(200,100,1240,100);
+    GRP.forEach(function(g){
+      g2+=oLine(g.cx,100,g.cx,126);
+      g2+='<rect x="'+(g.cx-90)+'" y="126" width="180" height="46" rx="7" fill="var(--surface-alt)" stroke="currentColor" stroke-opacity=".28"/>';
+      g2+='<rect x="'+(g.cx-90)+'" y="126" width="4.5" height="46" rx="2" fill="'+ORG_ACCENT.SCM+'"/>';
+      g2+='<text x="'+g.cx+'" y="145" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">'+g.n+'</text>';
+      g2+='<text x="'+g.cx+'" y="163" text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor" font-family="IBM Plex Mono, monospace">'+g.cnt+'명</text>';
+      var xs=g.dept.map(function(dd){return dd[1];});
+      g2+=oLine(g.cx,172,g.cx,200);
+      if(xs.length>1) g2+=oLine(Math.min.apply(null,xs),200,Math.max.apply(null,xs),200);
+      g.dept.forEach(function(dd){
+        var nm=dd[0], cx=dd[1], r=(ON.부서급여||[]).filter(function(x){return x.부서===nm;})[0]||{};
+        g2+=oLine(cx,200,cx,226);
+        g2+=oBox(cx-75,226,150,68,nm,r.조직도인원||0,r.매핑?r.급여총액:null,ORG_ACCENT.SCM,null);
+      });
+    });
+    h+=oFig('0 0 1440 310',g2,
+      'SCM팀 '+oHead('SCM팀')+'명이 전사의 '+pct(oHead('SCM팀')/T.전체)+'로 가장 큽니다. '+
+      '관리 '+ON.그룹표기.관리+' · 물류 '+ON.그룹표기.물류+' · 생산 '+ON.그룹표기.생산+'명으로 갈립니다. '+
+      '관리 그룹은 표기 11명이나 박스 안 이름은 9명이라 2명이 비어 있습니다.',
+      'SCM팀 조직도 — 관리·물류·생산 3개 그룹, 7개 부서, '+oHead('SCM팀')+'명');
+
+    /* ── 도식 3: 전략영업팀 ── */
+    var g3='', SUB=[['영업1',180,'이상근'],['영업4',360,'최세영'],['마케팅',540,null],['디자인',720,null]];
+    var sa=oUnit('전략영업팀')||{};
+    g3+=oBox(340,16,220,56,'전략영업팀',oHead('전략영업팀'),sa.급여인원?sa.급여총액:null,ORG_ACCENT['영업'],'정지원');
+    g3+=oLine(450,72,450,100)+oLine(180,100,720,100);
+    SUB.forEach(function(d){
+      var r=(ON.부서급여||[]).filter(function(x){return x.부서===d[0];})[0]||{};
+      g3+=oLine(d[1],100,d[1],126);
+      g3+=oBox(d[1]-80,126,160,74,d[0],r.조직도인원||0,r.매핑?r.급여총액:null,ORG_ACCENT['영업'],d[2]);
+    });
+    h+=oFig('0 0 900 220',g3,
+      '전략영업팀 '+oHead('전략영업팀')+'명은 팀장 정지원과 영업1·영업4·마케팅·디자인 4개 부서로 구성됩니다. '+
+      '영업1·영업4는 2026-02 급여대장에 같은 이름의 소속이 없어 급여를 붙이지 못했습니다.',
+      '전략영업팀 조직도 — 영업1·영업4·마케팅·디자인 4개 부서, '+oHead('전략영업팀')+'명');
+    return h;
+  }
+
   /* ================= 13. 조직 구조 ================= */
   function v13(){
     var oc=D.orgChart;
@@ -1438,6 +1556,7 @@
       ], BYFUNC.filter(function(f){return FUNC[f.기능];})));
     /* 현행 조직도 (2026-09-28) */
     var ON=D.orgNow, ONU=D.orgNowUnits, T=ON.총원;
+    h+=panel('조직도 ('+ON.기준일+' 기준)','박스마다 조직도 표기 인원과, 급여대장에서 대응 소속을 찾아 합산한 월 급여를 함께 적었습니다.',orgSvgAll(),true);
     h+=panel('현행 조직도 · 부서별 인원 ('+ON.기준일+' 기준)',
       '대표이사 '+esc(ON.대표이사)+' · 이사 '+ON.이사.map(esc).join(', ')+' · 출처: '+esc(ON.출처)+
       '. ㈜코코도르 기준이며 코코도르팜은 포함되지 않습니다.',
@@ -1454,6 +1573,14 @@
         {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
         {label:'비중',num:true,render:function(r){return pct(r.인원/T.전체);}},
         {label:'부서수',num:true,render:function(r){return r.부서수+'개';}},
+        {label:'월 급여총액',num:true,cls:'strong',render:function(r){
+          var u=oUnit(r.본부); if(!u||!u.급여인원) return '<span class="muted">미매핑</span>';
+          return won(u.급여총액);}},
+        {label:'급여 인원',num:true,render:function(r){
+          var u=oUnit(r.본부); if(!u||!u.급여인원) return '<span class="muted">-</span>';
+          return cnt(u.급여인원)+'명'+(u.완전매핑?'':' <span class="muted">(일부)</span>');}},
+        {label:'1인평균',num:true,render:function(r){
+          var u=oUnit(r.본부); return (u&&u['1인평균'])?won(u['1인평균']):'<span class="muted">-</span>';}},
         {label:'소속 부서',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:300px">'+r.부서.map(esc).join(' · ')+'</span>';}},
         {label:'',render:function(r){return bar(r.인원,ONU[0].인원);}}
       ], ONU.concat([{본부:'임원',장:ON.대표이사,인원:T.임원,부서수:0,부서:['대표이사','이사'],_t:1},
@@ -1470,9 +1597,28 @@
         {label:'표기인원',num:true,render:function(r){return cnt(r.표기인원)+'명';}},
         {label:'명단인원',num:true,cls:'strong',render:function(r){return cnt(r.명단인원)+'명';}},
         {label:'차이',num:true,render:function(r){return r.차이?'<b class="neg">'+(r.차이>0?'+':'')+r.차이+'</b>':'<span class="muted">-</span>';}},
+        {label:'월 급여총액',num:true,cls:'strong',render:function(r){
+          var q=oPay(r.부서); return q?won(q.급여총액):'<span class="muted">미매핑</span>';}},
+        {label:'1인평균',num:true,render:function(r){
+          var q=oPay(r.부서); return q?won(q['1인평균']):'<span class="muted">-</span>';}},
         {label:'구성',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:340px;font-size:11.5px">'+r.구성.map(esc).join(' · ')+'</span>';}}
       ], ON.부서표, '480px', function(r){return r.차이?'stripe-주의':'';}));
 
+    h+=panel('부서별 급여 매핑 현황',esc(ON.급여메타.주의),
+      '<div class="kpi-row" style="margin-bottom:10px">'+
+        kpi('매핑된 부서',ON.급여메타.매핑부서+' / '+ON.급여메타.전체부서,'부서명이 같거나 명백히 개칭된 경우만')+
+        kpi('매핑된 급여',man(ON.급여메타.매핑급여),'㈜코코도르 월 급여의 '+pct(ON.급여메타.매핑률),'lead')+
+        kpi('코코도르 총급여',man(ON.급여메타.코코도르총급여),esc(ON.급여메타.급여기준))+
+        kpi('미매핑 소속',ON.미매핑소속.length+'개','2월엔 있었으나 9월 조직도에 없음','bad')+
+      '</div>'+
+      table([
+        {label:'급여대장 소속 (2026-02)',render:function(r){return '<b>'+esc(r.소속)+'</b>';}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'월 급여총액',num:true,cls:'strong',render:function(r){return won(r.급여총액);}},
+        {label:'',render:function(r){return bar(r.급여총액,maxOf(ON.미매핑소속,function(x){return x.급여총액;}));}}
+      ], ON.미매핑소속));
+    h+=note('※ 위 소속들은 2026-02 급여대장에는 있으나 2026-09-28 조직도에서 같은 이름을 찾을 수 없습니다. '+
+      '영업 조직 개편(해외온라인·온라인영업·상품그룹·영업관리·국내B2B·쿠팡그룹)과 용인생산 10명의 행방이 확인 대상입니다.');
     if(ON.검산.length) h+=panel('인원수 표기 불일치 ('+ON.검산.length+'건)',
       '조직도에 적힌 인원수와 박스 안 이름 수가 맞지 않는 곳입니다. 누락된 이름인지 인원수 오기인지 확인이 필요합니다.',
       '<div class="cards">'+ON.검산.map(function(w){
