@@ -1482,32 +1482,70 @@
 
     /* ── 도식 2: SCM팀 ── */
     var g2='';
+    function dLead(nm){
+      var t=(ON.부서표||[]).filter(function(x){return x.부서===nm;})[0];
+      return t?t.장:null;
+    }
+    function grpSum(g){
+      var v=0,n=0,ok=true;
+      (ON.부서급여||[]).forEach(function(r){
+        if(r.그룹!==g) return;
+        if(r.매핑){ v+=r.급여총액; n+=r.급여인원; } else ok=false;
+      });
+      return {급여:v,인원:n,완전:ok};
+    }
     var GRP=[{n:'관리',cx:200,cnt:ON.그룹표기.관리,dept:[['본사SCM',130],['음성SCM',280]]},
              {n:'물류',cx:700,cnt:ON.그룹표기.물류,dept:[['본사물류',469],['온라인물류',623],['음성물류',777],['포장',931]]},
              {n:'생산',cx:1240,cnt:ON.그룹표기.생산,dept:[['음성생산',1240]]}];
     var scm=oUnit('SCM팀')||{};
-    g2+=oBox(620,16,200,56,'SCM팀',oHead('SCM팀'),scm.급여인원?scm.급여총액:null,ORG_ACCENT.SCM,'김보희');
-    g2+=oLine(720,72,720,100)+oLine(200,100,1240,100);
+    g2+=oBox(620,16,200,60,'SCM팀',oHead('SCM팀'),scm.급여인원?scm.급여총액:null,ORG_ACCENT.SCM,'김보희');
+    g2+=oLine(720,76,720,104)+oLine(200,104,1240,104);
     GRP.forEach(function(g){
-      g2+=oLine(g.cx,100,g.cx,126);
-      g2+='<rect x="'+(g.cx-90)+'" y="126" width="180" height="46" rx="7" fill="var(--surface-alt)" stroke="currentColor" stroke-opacity=".28"/>';
-      g2+='<rect x="'+(g.cx-90)+'" y="126" width="4.5" height="46" rx="2" fill="'+ORG_ACCENT.SCM+'"/>';
-      g2+='<text x="'+g.cx+'" y="145" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">'+g.n+'</text>';
-      g2+='<text x="'+g.cx+'" y="163" text-anchor="middle" font-size="12.5" font-weight="600" fill="currentColor" font-family="IBM Plex Mono, monospace">'+g.cnt+'명</text>';
+      var gs=grpSum(g.n);
+      g2+=oLine(g.cx,104,g.cx,130);
+      g2+='<rect x="'+(g.cx-95)+'" y="130" width="190" height="60" rx="7" fill="var(--surface-alt)" stroke="currentColor" stroke-opacity=".3"/>';
+      g2+='<rect x="'+(g.cx-95)+'" y="130" width="4.5" height="60" rx="2" fill="'+ORG_ACCENT.SCM+'"/>';
+      g2+='<text x="'+g.cx+'" y="149" text-anchor="middle" font-size="12.5" font-weight="700" fill="currentColor">'+g.n+' 그룹</text>';
+      g2+='<text x="'+g.cx+'" y="168" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor" font-family="IBM Plex Mono, monospace">'+g.cnt+'명</text>';
+      g2+='<text x="'+g.cx+'" y="183" text-anchor="middle" font-size="10.5" fill="'+ORG_ACCENT.SCM+'" font-family="IBM Plex Mono, monospace">'+
+           (gs.인원?man(gs.급여)+(gs.완전?'':' (일부)'):'급여 미매핑')+'</text>';
       var xs=g.dept.map(function(dd){return dd[1];});
-      g2+=oLine(g.cx,172,g.cx,200);
-      if(xs.length>1) g2+=oLine(Math.min.apply(null,xs),200,Math.max.apply(null,xs),200);
+      g2+=oLine(g.cx,190,g.cx,218);
+      if(xs.length>1) g2+=oLine(Math.min.apply(null,xs),218,Math.max.apply(null,xs),218);
       g.dept.forEach(function(dd){
         var nm=dd[0], cx=dd[1], r=(ON.부서급여||[]).filter(function(x){return x.부서===nm;})[0]||{};
-        g2+=oLine(cx,200,cx,226);
-        g2+=oBox(cx-75,226,150,68,nm,r.조직도인원||0,r.매핑?r.급여총액:null,ORG_ACCENT.SCM,null);
+        g2+=oLine(cx,218,cx,244);
+        g2+=oBox(cx-75,244,150,84,nm,r.조직도인원||0,r.매핑?r.급여총액:null,ORG_ACCENT.SCM,dLead(nm)||'책임자 미지정');
       });
     });
-    h+=oFig('0 0 1440 310',g2,
+    h+=oFig('0 0 1440 348',g2,
       'SCM팀 '+oHead('SCM팀')+'명이 전사의 '+pct(oHead('SCM팀')/T.전체)+'로 가장 큽니다. '+
-      '관리 '+ON.그룹표기.관리+' · 물류 '+ON.그룹표기.물류+' · 생산 '+ON.그룹표기.생산+'명으로 갈립니다. '+
-      '관리 그룹은 표기 11명이나 박스 안 이름은 9명이라 2명이 비어 있습니다.',
-      'SCM팀 조직도 — 관리·물류·생산 3개 그룹, 7개 부서, '+oHead('SCM팀')+'명');
+      '관리 '+ON.그룹표기.관리+' · 물류 '+ON.그룹표기.물류+' · 생산 '+ON.그룹표기.생산+'명으로 갈리고, 그 아래 7개 부서가 있습니다. '+
+      '각 박스는 조직명 · 책임자 · 인원 · 월 급여 순입니다. 관리 그룹은 표기 11명이나 박스 안 이름은 9명이라 2명이 비어 있습니다.',
+      'SCM팀 조직도 — 관리·물류·생산 3개 그룹 아래 7개 부서, '+oHead('SCM팀')+'명');
+
+    /* SCM 하위조직 상세표 */
+    var scmRows=(ON.부서급여||[]).filter(function(r){return r.본부==='SCM팀';});
+    var gTot={}; (ON.그룹표기&&Object.keys(ON.그룹표기)||[]).forEach(function(k){ gTot[k]=ON.그룹표기[k]; });
+    h+=panel('SCM팀 하위조직 상세 ('+scmRows.length+'개 부서 · '+oHead('SCM팀')+'명)',
+      '그룹별 인원은 조직도에 적힌 표기값이고, 부서 인원의 합과 다르면 아래 「표기 불일치」에 나옵니다.',
+      table([
+        {label:'그룹',render:function(r){return '<span class="dot" style="background:'+ORG_ACCENT.SCM+'"></span> '+esc(r.그룹||'-');}},
+        {label:'그룹 인원',num:true,render:function(r){return gTot[r.그룹]?cnt(gTot[r.그룹])+'명':'<span class="muted">-</span>';}},
+        {label:'조직명',render:function(r){return '<b>'+esc(r.부서)+'</b>';}},
+        {label:'책임자',render:function(r){
+          var t=(ON.부서표||[]).filter(function(x){return x.부서===r.부서;})[0];
+          return (t&&t.장)?esc(t.장):'<span class="muted">미지정</span>';}},
+        {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.조직도인원)+'명';}},
+        {label:'SCM 내 비중',num:true,render:function(r){return pct(r.조직도인원/oHead('SCM팀'));}},
+        {label:'월 급여총액',num:true,cls:'strong',render:function(r){return r.매핑?won(r.급여총액):'<span class="muted">미매핑</span>';}},
+        {label:'급여 인원',num:true,render:function(r){return r.매핑?cnt(r.급여인원)+'명':'<span class="muted">-</span>';}},
+        {label:'1인평균',num:true,render:function(r){return r.매핑&&r['1인평균']?won(r['1인평균']):'<span class="muted">-</span>';}},
+        {label:'구성원',render:function(r){
+          var t=(ON.부서표||[]).filter(function(x){return x.부서===r.부서;})[0];
+          if(!t) return '<span class="muted">-</span>';
+          return '<span style="white-space:normal;display:inline-block;min-width:320px;font-size:11.5px">'+t.구성.map(esc).join(' · ')+'</span>';}}
+      ], scmRows, null, null));
 
     /* ── 도식 3: 전략영업팀 ── */
     var g3='', SUB=[['영업1',180,'이상근'],['영업4',360,'최세영'],['마케팅',540,null],['디자인',720,null]];
