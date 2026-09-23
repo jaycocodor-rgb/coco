@@ -46,7 +46,7 @@
                 background:var(--accent);color:#fff;font-weight:600;letter-spacing:.02em;}
   .nav-item{display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;background:none;border:none;
             padding:6px 8px;border-radius:7px;color:var(--ink-2);font-size:12.4px;font-family:inherit;cursor:pointer;line-height:1.35;}
-  .nav-item .idx{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);flex:0 0 17px;padding-top:1px;}
+  .nav-item .idx{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);flex:0 0 30px;padding-top:1px;white-space:nowrap;}
   .nav-item:hover{background:var(--surface);color:var(--ink);}
   .nav-item.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
   .nav-item.active .idx{color:var(--accent);}
@@ -113,7 +113,7 @@
   tr.stripe-주의 td:first-child{box-shadow:inset 3px 0 0 var(--warn);}
   tr.stripe-참고 td:first-child{box-shadow:inset 3px 0 0 var(--accent-2);}
 
-  .bar{height:7px;border-radius:3px;background:var(--surface-alt);overflow:hidden;min-width:56px;}
+  .bar{display:block;height:7px;border-radius:3px;background:var(--surface-alt);overflow:hidden;min-width:56px;}
   .bar > i{display:block;height:100%;background:var(--accent);}
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:0 0 auto;}
 
@@ -253,9 +253,9 @@
   function coLabel(){ return CO==='전체'?'3개 법인 전체':CO; }
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
-    var KR_ONLY={v1:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
+    var KR_ONLY={v1:1,vjc:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
     var TW_ONLY={v2:1};
-    var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v14:1,v15:1,v16:1,v17:1,v18:1};
+    var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
     if(TW_ONLY[id]) return 'tw';
     if(GLOBAL[id]) return 'all';
     if(KR_ONLY[id]) return 'kr';
@@ -266,7 +266,11 @@
     if(CO==='전체') return '';
     if(sc==='tw') return CO==='대만법인'?'':banner('이 메뉴는 대만법인 전용입니다. 현재 선택은 「'+CO+'」라 내용이 적용되지 않습니다.');
     if(id==='v0') return '';
-    if(sc==='all') return banner('이 메뉴는 법인을 나눌 수 없는 자료입니다 — 원본이 법인 합산 또는 전사 기준이라 「'+CO+'」 선택과 무관하게 전체 값을 보여줍니다.');
+    if(sc==='all'){
+      if(CO==='대만법인' && KR_BASE_VIEWS[id])
+        return banner('이 메뉴의 인원·인건비는 한국 급여대장에서만 나옵니다. 「대만법인」을 골라도 <b>한국 전체</b> 기준으로 보여줍니다.');
+      return banner('이 메뉴는 법인을 나눌 수 없는 자료입니다 — 원본이 법인 합산 또는 전사 기준이라 「'+CO+'」 선택과 무관하게 전체 값을 보여줍니다.');
+    }
     if(CO==='대만법인') return banner('대만법인은 한국 급여대장에 포함되지 않습니다. 대만 인건비는 <b>2번 대만법인 인건비</b> 메뉴에서 보십시오.');
     return '';
   }
@@ -356,8 +360,12 @@
       야근교통비:list.reduce(function(a,e){return a+e.야근교통비;},0)
     };
   }
-  function applyFilter(){
-    EMPS = (CO==='대만법인') ? [] : (CO==='전체' ? D.employees : D.employees.filter(function(e){return e.법인===CO;}));
+  /* 한국 급여대장에서만 나오는 수치를 쓰는 전사 메뉴(조직·전략)는
+     대만법인을 골라도 한국 전체를 밑바탕으로 삼는다. 안 그러면 분모가 0이 되어 NaN이 뜬다. */
+  var KR_BASE_VIEWS={v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1};
+  function applyFilter(krBase){
+    EMPS = (CO==='대만법인') ? (krBase ? D.employees : [])
+         : (CO==='전체' ? D.employees : D.employees.filter(function(e){return e.법인===CO;}));
     var names={}; EMPS.forEach(function(e){ names[e.성명]=1; });
     WORK   = D.workforce.filter(function(w){return names[w.성명];});
     RAISES = D.raises.filter(function(r){return names[r.성명];});
@@ -365,6 +373,38 @@
     TOT=FACTS.월인건비; HC=EMPS.length;
     BYDEPT=deptAgg(EMPS); ALLOW=allowAgg(EMPS); BYFUNC=funcAgg(EMPS); TENURE=tenureAgg(EMPS);
   }
+  /* ================= 직군 집계 (사무직/센터직 · 영업/관리 · 물류/생산) ================= */
+  var JC_ORDER={'사무직':['영업직','관리직'],'센터직':['생산','물류'],'미지정':['미지정']};
+  function jcSum(rows,label,total){
+    var pay=0, ot=0, base=0;
+    rows.forEach(function(e){ pay+=e.지급총액; ot+=e.연장수당계; base+=e.기본급; });
+    return {구분:label, 인원:rows.length, 인건비:pay, 기본급:base, 연장수당:ot,
+      '1인평균':rows.length?Math.round(pay/rows.length):0,
+      연장비중:pay?ot/pay:0,
+      인원비중:(total&&total.n)?rows.length/total.n:0,
+      인건비비중:(total&&total.p)?pay/total.p:0, rows:rows};
+  }
+  function jcBy(list,key,total){
+    var m={}, order=[];
+    list.forEach(function(e){ var k=e[key]||'미지정'; if(!m[k]){m[k]=[];order.push(k);} m[k].push(e); });
+    return order.map(function(k){ return jcSum(m[k],k,total); })
+                .sort(function(a,b){ return b.인건비-a.인건비; });
+  }
+  function jcTree(){
+    var T={n:EMPS.length, p:TOT};
+    return ['사무직','센터직','미지정'].map(function(jc){
+      var rs=EMPS.filter(function(e){return e.직군===jc;});
+      if(!rs.length) return null;
+      var node=jcSum(rs,jc,T);
+      node.하위=JC_ORDER[jc].map(function(sub){
+        var ss=rs.filter(function(e){return e.직군세부===sub;});
+        return ss.length?jcSum(ss,sub,T):null;
+      }).filter(Boolean);
+      return node;
+    }).filter(Boolean);
+  }
+  function jcPick(sub){ return EMPS.filter(function(e){return e.직군세부===sub;}); }
+
   function AL(name){
     var r=ALLOW.filter(function(x){return x.항목===name;})[0];
     return r||{항목:name,구분:'변동항목',총액:0,수령인원:0,'1인평균':0,비중:0};
@@ -1564,36 +1604,18 @@
     return h;
   }
 
-  /* ================= 13. 조직 구조 ================= */
+  /* ================= 14-1. 현행 조직도 ================= */
   function v13(){
-    var oc=D.orgChart;
-    var h=head('14. 미래 조직 구조 · 조직도','2026-09-28 현행 조직도(총원 '+D.orgNow.총원.전체+'명)를 기준으로, 2024-10-30 조직도·2026-02 급여대장과 대조하고 다음 구조를 제안합니다.',['part','실측+제안']);
+    var oc=D.orgChart, ON=D.orgNow, ONU=D.orgNowUnits, T=ON.총원;
+    var h=head('14-1. 현행 조직도','2026-09-28 조직도(총원 '+T.전체+'명)를 그대로 옮기고, 각 조직에 2026-02 급여대장의 대응 소속을 붙여 월 급여를 합산했습니다.',['fact','실측']);
     h+='<div class="kpi-row">'+
-      kpi('현 부서 수',BYDEPT.length+'개','부서당 평균 '+(HC/BYDEPT.length).toFixed(1)+'명')+
-      kpi('개편 이동 인원',FL(D.orgMoves).length+'명','2025-07 → 2026-02','lead')+
-      kpi('직책 보유',FACTS.직책보유+'명','관리 스팬 1:'+(HC/FACTS.직책보유).toFixed(1))+
-      kpi('생산·물류 비중',pct(FACTS.생산물류비중),FN('생산·물류').인원+'명')+
-      kpi('외국인 인력',FACTS.외국인추정+'명',pct(FACTS.외국인추정/HC))+
+      kpi('조직도 총원',cnt(T.전체)+'명','임원 '+T.임원+' + 본부 '+T.본부합계,'lead')+
+      kpi('본부 수',ONU.length+'개','부서 '+ON.부서표.length+'개')+
+      kpi('급여대장 부서 수',BYDEPT.length+'개','부서당 평균 '+(HC/BYDEPT.length).toFixed(1)+'명')+
+      kpi('휴직자',T.휴직자+'명','조직도 박스에는 미포함')+
+      kpi('표기 불일치',ON.검산.length+'건',ON.검산.length?'아래 확인 필요':'없음',ON.검산.length?'bad':'')+
       '</div>';
-    h+=panel('현 구조의 문제','',
-      '<div class="cards">'+[
-        ['부서 파편화',BYDEPT.length+'개 부서에 '+HC+'명 — 3명 이하 부서가 '+
-         BYDEPT.filter(function(d){return d.인원<=3;}).length+'개입니다. 대체인력·승계가 불가능한 1인 기능이 다수입니다.'],
-        ['관리 스팬 불균형','직책 보유자 '+FACTS.직책보유+'명이 1인당 '+(HC/FACTS.직책보유).toFixed(1)+
-         '명을 봅니다. 직책수당은 13명에게만 월 200만원 — 책임과 보상이 어긋나 있습니다.'],
-        ['부서 마스터 미정비','「온라인물류」/「온라인물류*」 이중 표기, 소속 미지정 3명. 조직 개편이 급여 시스템에 정확히 반영되지 않았습니다.']
-      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
-    h+=panel('제안: 4본부 체제','현 '+BYDEPT.length+'개 부서를 기능 단위 4본부로 묶고 본부장 책임과 직책수당을 연동합니다.',
-      table([
-        {label:'본부(안)',render:function(r){return '<span class="dot" style="background:'+FN_COLOR[r.기능]+'"></span> '+esc(r.기능);}},
-        {label:'현 인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
-        {label:'월 인건비',num:true,render:function(r){return won(r.인건비);}},
-        {label:'비중',num:true,render:function(r){return pct(r.인건비비중);}},
-        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
-        {label:'포함 부서',render:function(r){return '<span style="white-space:normal">'+esc((FUNC[r.기능]||[]).join(', '))+'</span>';}}
-      ], BYFUNC.filter(function(f){return FUNC[f.기능];})));
     /* 현행 조직도 (2026-09-28) */
-    var ON=D.orgNow, ONU=D.orgNowUnits, T=ON.총원;
     h+=panel('조직도 ('+ON.기준일+' 기준)','박스마다 조직도 표기 인원과, 급여대장에서 대응 소속을 찾아 합산한 월 급여를 함께 적었습니다.',orgSvgAll(),true);
     h+=panel('현행 조직도 · 부서별 인원 ('+ON.기준일+' 기준)',
       '대표이사 '+esc(ON.대표이사)+' · 이사 '+ON.이사.map(esc).join(', ')+' · 출처: '+esc(ON.출처)+
@@ -1699,6 +1721,246 @@
         {label:'2026-02 소속',render:function(r){return fnDot(r['2026-02'])+' '+esc(r['2026-02']);}},
         {label:'직책',render:function(r){return esc(r.직책변화);}}
       ], FL(D.orgMoves), '400px'));
+    return h;
+  }
+
+  /* ================= 14-2. 미래 조직 구조 ================= */
+  function v13b(){
+    var TR=jcTree();
+    function nd(n){ return TR.filter(function(x){return x.구분===n;})[0]||jcSum([],n,{n:1,p:1}); }
+    function sb(p,n){ var x=nd(p).하위||[]; return x.filter(function(y){return y.구분===n;})[0]||jcSum([],n,{n:1,p:1}); }
+    var 사무=nd('사무직'), 센터=nd('센터직'), 영업=sb('사무직','영업직'), 관리=sb('사무직','관리직');
+    var 생산=sb('센터직','생산'), 물류=sb('센터직','물류');
+    var h=head('14-2. 미래 조직 구조','현행 조직도(14-1)와 급여대장 실측을 근거로 제안하는 구조입니다. 여기부터는 실측이 아니라 제안입니다.',['plan','제안']);
+    h+='<div class="kpi-row">'+
+      kpi('현 부서 수',BYDEPT.length+'개','부서당 평균 '+(HC/BYDEPT.length).toFixed(1)+'명')+
+      kpi('3명 이하 부서',BYDEPT.filter(function(d){return d.인원<=3;}).length+'개','대체·승계 불가 구간','bad')+
+      kpi('직책 보유',FACTS.직책보유+'명','관리 스팬 1:'+(HC/FACTS.직책보유).toFixed(1))+
+      kpi('개편 이동 인원',FL(D.orgMoves).length+'명','2025-07 → 2026-02','lead')+
+      kpi('생산·물류 비중',pct(FACTS.생산물류비중),FN('생산·물류').인원+'명')+
+      '</div>';
+    h+=panel('현 구조의 문제','',
+      '<div class="cards">'+[
+        ['부서 파편화',BYDEPT.length+'개 부서에 '+HC+'명 — 3명 이하 부서가 '+
+         BYDEPT.filter(function(d){return d.인원<=3;}).length+'개입니다. 대체인력·승계가 불가능한 1인 기능이 다수입니다.'],
+        ['관리 스팬 불균형','직책 보유자 '+FACTS.직책보유+'명이 1인당 '+(HC/FACTS.직책보유).toFixed(1)+
+         '명을 봅니다. 직책수당은 13명에게만 월 200만원 — 책임과 보상이 어긋나 있습니다.'],
+        ['부서 마스터 미정비','「온라인물류」/「온라인물류*」 이중 표기, 소속 미지정 3명. 조직 개편이 급여 시스템에 정확히 반영되지 않았습니다.']
+      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+    h+=panel('제안: 4본부 체제','현 '+BYDEPT.length+'개 부서를 기능 단위 4본부로 묶고 본부장 책임과 직책수당을 연동합니다.',
+      table([
+        {label:'본부(안)',render:function(r){return '<span class="dot" style="background:'+FN_COLOR[r.기능]+'"></span> '+esc(r.기능);}},
+        {label:'현 인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'월 인건비',num:true,render:function(r){return won(r.인건비);}},
+        {label:'비중',num:true,render:function(r){return pct(r.인건비비중);}},
+        {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+        {label:'포함 부서',render:function(r){return '<span style="white-space:normal">'+esc((FUNC[r.기능]||[]).join(', '))+'</span>';}}
+      ], BYFUNC.filter(function(f){return FUNC[f.기능];})));
+    h+=panel('제안: 직군 기준 인력 운영','1-1 인건비 분석의 직군 분류를 그대로 조직 설계에 쓰면, 본부를 바꾸지 않고도 처우·연장 정책을 나눌 수 있습니다.',
+      '<div class="cards">'+[
+        ['사무직 '+사무.인원+'명 — 처우는 등급, 연장은 예외',
+         '영업직 '+영업.인원+'명 · 관리직 '+관리.인원+'명. 연장비중이 영업직 '+pct(영업.연장비중)+' · 관리직 '+pct(관리.연장비중)+'로 이미 갈립니다. '+
+         '사무직은 고정연장을 줄이고 성과 상여로 옮기는 쪽이 맞습니다.'],
+        ['센터직 '+센터.인원+'명 — 연장은 구조, 처우는 숙련',
+         '생산 '+생산.인원+'명 · 물류 '+물류.인원+'명. 1인평균 '+won(센터['1인평균'])+'로 사무직보다 '+won(사무['1인평균']-센터['1인평균'])+' 낮습니다. '+
+         '연장을 깎는 대신 숙련 등급제로 기본급을 올려야 이탈이 멈춥니다.'],
+        ['해외 '+D.overseas.합계.인원+'명 — 지사와 본사 담당을 한 라인으로',
+         '대만 지사 '+D.overseas.지사.인원+'명과 한국 해외담당 '+D.overseas.한국담당.계.인원+'명이 각각 움직입니다. '+
+         '해외 인건비율은 '+pct(D.overseasRatio.합계.인건비율)+'로 전사 '+pct(D.overseasRatio.국내비교.전사인건비율)+'보다 낮아, 증원 여력이 있는 쪽입니다.']
+      ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+    h+=panel('제안 구조와 현 인원 대조','4본부(안)에 현 인원을 얹으면 이렇게 됩니다. 직군은 1-1 분류 기준입니다.',
+      jcPartTable(jcBy(EMPS,'직군세부',{n:HC,p:TOT}),'직군'));
+    h+=note('※ 이 장의 본부(안)·직군 운영안은 제안입니다. 인원·인건비 수치만 '+D.asOf+' 급여대장 실측이고, 배치와 정책은 확정된 내용이 아닙니다.');
+    return h;
+  }
+
+
+  /* ================= 1-1. 인건비 분석 · 직군별 ================= */
+  var vjcTab='총괄';
+  function jcTabBar(){
+    var T=[['총괄','① 직군 총괄'],['영업','② 영업'],['센터','③ 센터직'],['관리','④ 사무 관리직'],['해외','⑤ 해외 인력']];
+    return '<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vjcTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vjc="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+  }
+  function jcPartTable(rows,labelName,extraCols){
+    var mx=maxOf(rows,function(r){return r.인건비;});
+    var cols=[{label:labelName,render:function(r){return '<b>'+esc(r.구분)+'</b>';}}];
+    (extraCols||[]).forEach(function(c){ cols.push(c); });
+    cols=cols.concat([
+      {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+      {label:'월 인건비',num:true,cls:'strong',render:function(r){return won(r.인건비);}},
+      {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+      {label:'연장수당',num:true,render:function(r){return won(r.연장수당);}},
+      {label:'연장비중',num:true,render:function(r){
+        return '<span'+(r.연장비중>=0.25?' style="color:var(--crit);font-weight:600"':'')+'>'+pct(r.연장비중)+'</span>';}},
+      {label:'전사 비중',num:true,render:function(r){return pct(r.인건비비중);}},
+      {label:'',render:function(r){return bar(r.인건비,mx);}}
+    ]);
+    return table(cols,rows);
+  }
+
+  function vJC(){
+    var TR=jcTree();
+    function node(n){ return TR.filter(function(x){return x.구분===n;})[0]||jcSum([],n,{n:1,p:1}); }
+    function sub(p,n){ var x=node(p).하위||[]; return x.filter(function(y){return y.구분===n;})[0]||jcSum([],n,{n:1,p:1}); }
+    var 사무=node('사무직'), 센터=node('센터직'), 미지정=node('미지정');
+    var 영업=sub('사무직','영업직'), 관리=sub('사무직','관리직');
+    var 생산=sub('센터직','생산'), 물류=sub('센터직','물류');
+
+    var h=head('1-1. 인건비 분석 · 직군별',
+      '사무직(영업직·관리직)과 센터직(생산·물류)으로 나눈 인원·인건비입니다. '+
+      '한국 '+D.asOf+' 급여대장 '+HC+'명 기준이며, 분류 근거는 급여대장 「소속」입니다.',['fact','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('사무직',cnt(사무.인원)+'명',won(사무.인건비)+' · '+pct(사무.인건비비중),'lead')+
+      kpi('센터직',cnt(센터.인원)+'명',won(센터.인건비)+' · '+pct(센터.인건비비중))+
+      kpi('사무직 1인평균',won(사무['1인평균']),'센터직 '+won(센터['1인평균']))+
+      kpi('센터직 연장비중',pct(센터.연장비중),'사무직 '+pct(사무.연장비중),센터.연장비중>=0.2?'warn':'')+
+      (미지정.인원?kpi('소속 미지정',cnt(미지정.인원)+'명','어느 직군에도 넣지 않음','bad'):'')+
+      '</div>';
+    h+=jcTabBar();
+
+    if(vjcTab==='총괄'){
+      h+=panel('직군 2단 분류','위 칸이 1단(사무직/센터직), 들여쓴 칸이 2단입니다. 비중은 '+HC+'명·'+won(TOT)+' 대비입니다.',
+        table([
+          {label:'직군',render:function(r){
+            return r.lv===2 ? '<span style="padding-left:18px;color:var(--ink-2)">└ '+esc(r.구분)+'</span>'
+                            : '<b>'+esc(r.구분)+'</b>';}},
+          {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+          {label:'인원비중',num:true,render:function(r){return pct(r.인원비중);}},
+          {label:'월 인건비',num:true,cls:'strong',render:function(r){return won(r.인건비);}},
+          {label:'인건비비중',num:true,render:function(r){return pct(r.인건비비중);}},
+          {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+          {label:'연장비중',num:true,render:function(r){
+            return '<span'+(r.연장비중>=0.25?' style="color:var(--crit);font-weight:600"':'')+'>'+pct(r.연장비중)+'</span>';}},
+          {label:'',render:function(r){return bar(r.인건비,TOT);}}
+        ], (function(){ var out=[]; TR.forEach(function(n){ n.lv=1; out.push(n);
+            (n.하위||[]).forEach(function(x){ x.lv=2; out.push(x); }); }); return out; })(),
+        null, function(r){ return r.lv===1?'row-strong':''; }));
+
+      h+=panel('한 장으로 보는 분포','',
+        '<div class="cards">'+[
+          ['사무직 '+cnt(사무.인원)+'명 · '+pct(사무.인원비중),
+           '영업직 '+영업.인원+'명('+won(영업.인건비)+') + 관리직 '+관리.인원+'명('+won(관리.인건비)+'). '+
+           '인원은 전체의 '+pct(사무.인원비중)+'인데 인건비는 '+pct(사무.인건비비중)+'을 씁니다.'],
+          ['센터직 '+cnt(센터.인원)+'명 · '+pct(센터.인원비중),
+           '생산 '+생산.인원+'명('+won(생산.인건비)+') + 물류 '+물류.인원+'명('+won(물류.인건비)+'). '+
+           '1인평균은 '+won(센터['1인평균'])+'으로 사무직보다 '+won(사무['1인평균']-센터['1인평균'])+' 낮습니다.'],
+          ['연장수당이 몰린 쪽',
+           '연장비중은 영업직 '+pct(영업.연장비중)+' · 물류 '+pct(물류.연장비중)+' · 생산 '+pct(생산.연장비중)+
+           ' · 관리직 '+pct(관리.연장비중)+'입니다. 고정연장수당 설계가 직군마다 다릅니다.']
+        ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+
+      h+=panel('전 파트 한눈에','직군 구분 없이 모든 파트를 인건비 순으로 놓았습니다.',
+        jcPartTable(jcBy(EMPS,'파트',{n:HC,p:TOT}),'파트',[
+          {label:'직군',render:function(r){return esc(r.rows[0].직군)+' · '+esc(r.rows[0].직군세부);}}
+        ]));
+    }
+
+    if(vjcTab==='영업'){
+      var SR=영업.rows;
+      var 직접=jcSum(SR.filter(function(e){return e.영업구분==='직접영업';}),'직접영업',{n:HC,p:TOT});
+      var 지원=jcSum(SR.filter(function(e){return e.영업구분==='영업지원';}),'영업지원',{n:HC,p:TOT});
+      h+=panel('영업 총인건비','영업직 '+영업.인원+'명 전체입니다. 조직도상 마케팅·디자인이 전략영업팀 하위라 영업직에 넣되 「영업지원」으로 따로 적었습니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('영업 총인건비',won(영업.인건비),'연환산 '+eok(영업.인건비*12),'lead')+
+          kpi('영업 인원',cnt(영업.인원)+'명','전사의 '+pct(영업.인원비중))+
+          kpi('직접영업',cnt(직접.인원)+'명',won(직접.인건비))+
+          kpi('영업지원',cnt(지원.인원)+'명',won(지원.인건비))+
+          kpi('영업 1인평균',won(영업['1인평균']),'전사 '+won(HC?Math.round(TOT/HC):0))+
+          kpi('영업 연장비중',pct(영업.연장비중),won(영업.연장수당),영업.연장비중>=0.25?'warn':'')+
+        '</div>'+
+        jcPartTable(jcBy(SR,'파트',{n:HC,p:TOT}),'영업 파트',[
+          {label:'구분',render:function(r){
+            var g=r.rows[0].영업구분;
+            return '<span class="tag '+(g==='직접영업'?'fact':'part')+'">'+esc(g)+'</span>';}}
+        ]));
+      h+=note('※ 영업 파트별 매출은 이 대시보드의 원본(급여대장)에 없습니다. 채널별 매출 대비 인건비는 ⑤ 해외 인력 탭에서 확보된 채널만 계산했습니다.');
+    }
+
+    if(vjcTab==='센터'){
+      var CR=센터.rows;
+      h+=panel('센터직 — 물류 / 생산','사업장(음성·용인·본사·고성)에서 일하는 인원입니다. 본사물류는 본사에 있으나 업무가 물류라 센터직으로 넣었습니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('센터직 계',cnt(센터.인원)+'명',won(센터.인건비)+' · 전사의 '+pct(센터.인건비비중),'lead')+
+          kpi('생산',cnt(생산.인원)+'명',won(생산.인건비)+' · 1인 '+won(생산['1인평균']))+
+          kpi('물류',cnt(물류.인원)+'명',won(물류.인건비)+' · 1인 '+won(물류['1인평균']))+
+          kpi('생산 연장비중',pct(생산.연장비중),won(생산.연장수당),생산.연장비중>=0.25?'warn':'')+
+          kpi('물류 연장비중',pct(물류.연장비중),won(물류.연장수당),물류.연장비중>=0.25?'warn':'')+
+        '</div>'+
+        jcPartTable(jcBy(CR,'파트',{n:HC,p:TOT}),'파트',[
+          {label:'구분',render:function(r){
+            var g=r.rows[0].직군세부;
+            return '<span class="tag '+(g==='생산'?'fact':'part')+'">'+esc(g)+'</span>';}},
+          {label:'사업장',render:function(r){return esc(r.rows[0].사업장);}}
+        ]));
+      h+=panel('사업장별','같은 센터직을 근무지 기준으로 다시 묶었습니다.',
+        jcPartTable(jcBy(CR,'사업장',{n:HC,p:TOT}),'사업장'));
+      h+=note('※ 음성관리·품질은 음성 사업장 소속이라 생산에 포함했습니다. 코코도르팜(원예운영·고성)은 생산으로 분류했습니다.');
+    }
+
+    if(vjcTab==='관리'){
+      h+=panel('사무 관리직','영업을 뺀 본사 사무직입니다. 임원도 여기에 들어 있습니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('관리직 계',cnt(관리.인원)+'명',won(관리.인건비)+' · 전사의 '+pct(관리.인건비비중),'lead')+
+          kpi('관리직 1인평균',won(관리['1인평균']),'영업직 '+won(영업['1인평균']))+
+          kpi('관리직 연장비중',pct(관리.연장비중),won(관리.연장수당))+
+          kpi('사무직 내 비중',pct(사무.인원?관리.인원/사무.인원:0),'영업직 '+pct(사무.인원?영업.인원/사무.인원:0))+
+        '</div>'+
+        jcPartTable(jcBy(관리.rows,'파트',{n:HC,p:TOT}),'파트'));
+    }
+
+    if(vjcTab==='해외'){
+      var OV=D.overseas, OR=D.overseasRatio, TW=OV.지사;
+      h+=panel('해외 인력 — 지사 + 한국 해외담당','대만 지사는 별도 급여대장(총원가 기준), 한국 해외담당은 '+D.asOf+' 급여대장입니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('해외 인력 계',cnt(OV.합계.인원)+'명',won(OV.합계.인건비)+' · 1인 '+won(OV.합계['1인평균']),'lead')+
+          kpi('대만 지사',cnt(TW.인원)+'명',won(TW.총원가)+' · '+TW.기준월)+
+          kpi('한국 해외담당',cnt(OV.한국담당.계.인원)+'명',won(OV.한국담당.계.인건비))+
+          kpi('지사 1인평균',won(TW['1인평균']),'한국 해외담당 '+won(OV.한국담당.계['1인평균']))+
+          kpi('국내 외국인 (참고)',cnt(OV.국내외국인참고.인원)+'명',won(OV.국내외국인참고.인건비))+
+        '</div>'+
+        table([
+          {label:'구분',render:function(r){return '<b>'+esc(r.구분)+'</b>';}},
+          {label:'소재',render:function(r){return esc(r.소재);}},
+          {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+          {label:'월 인건비',num:true,cls:'strong',render:function(r){return won(r.인건비);}},
+          {label:'1인평균',num:true,render:function(r){return won(r['1인평균']);}},
+          {label:'기준',render:function(r){return esc(r.기준);}}
+        ], [
+          {구분:'대만법인 (지사)',소재:'대만 타이베이',인원:TW.인원,인건비:TW.총원가,
+           '1인평균':TW['1인평균'],기준:TW.기준월+' 급여대장 · 총원가(회사부담 포함)'}
+        ].concat(OV.한국담당.부서.map(function(b){
+          return {구분:b.구분,소재:'한국 본사',인원:b.인원,인건비:b.인건비,
+                  '1인평균':b['1인평균'],기준:D.asOf+' 급여대장 · 지급총액'};
+        }))));
+
+      h+=panel('해외 매출 대비 인건비','해외 조직의 직접 인건비를 그 조직이 맡는 채널 매출로 나눈 값입니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('해외 인건비율',pct(OR.합계.인건비율),'월매출 '+eok(OR.합계.월매출)+' · 인건비 '+won(OR.합계.월인건비),'lead')+
+          kpi('전사 인건비율',pct(OR.국내비교.전사인건비율),'전 채널 월매출 '+eok(OR.국내비교.채널월매출))+
+          kpi('격차',pct(OR.국내비교.전사인건비율-OR.합계.인건비율)+'p','해외가 그만큼 낮음','good')+
+        '</div>'+
+        table([
+          {label:'구분',render:function(r){return '<b>'+esc(r.구분)+'</b>';}},
+          {label:'인력',render:function(r){return esc(r.인력);}},
+          {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+          {label:'월 매출',num:true,cls:'strong',render:function(r){
+            return r.월매출===null?'<span class="muted">원본 없음</span>':eok(r.월매출);}},
+          {label:'월 인건비',num:true,render:function(r){return won(r.월인건비);}},
+          {label:'인건비율',num:true,cls:'strong',render:function(r){
+            return r.인건비율===null?'<span class="muted">-</span>':pct(r.인건비율);}},
+          {label:'매출 출처',render:function(r){return '<span style="white-space:normal">'+esc(r.매출출처)+'</span>';}}
+        ], OR.행));
+
+      h+=panel('이 숫자를 읽을 때','',
+        '<div class="cards">'+OR.한계.map(function(t){
+          return '<div class="card" style="border-color:var(--warn)"><p style="margin:0">'+esc(t)+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=note('※ '+esc(OV.국내외국인참고.설명)+' 국내 외국인 인력은 10번 「외국인 급여대장」 메뉴에서 자세히 봅니다.');
+    }
+
+    h+=note('※ 분류 기준 — '+D.jobClassMeta.기준+'. '+D.jobClassMeta.주의.join(' '));
     return h;
   }
 
@@ -1880,6 +2142,7 @@
   var VIEWS=[
     {id:'v0', n:'0', t:'인사 CFO 요약',            g:'요약', f:v0},
     {id:'v1', n:'1', t:'부서별 인건비 현황',        g:'인건비 현황', f:v1},
+    {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
     {id:'v3', n:'3', t:'월별 카테고리별 지급',       g:'인건비 현황', f:v3},
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
@@ -1892,7 +2155,8 @@
     {id:'v10',n:'11',t:'복리후생비 사용현황',        g:'비용', f:v10},
     {id:'v11',n:'12',t:'매출 대비 인건비 · 5년',     g:'비용', f:v11},
     {id:'v12',n:'13',t:'급여 · 수당 오류 검증',      g:'검증', f:v12},
-    {id:'v13',n:'14',t:'미래 조직 구조 · 조직도',    g:'전략 설계', f:v13},
+    {id:'v13',n:'14-1',t:'현행 조직도',             g:'조직', f:v13},
+    {id:'v13b',n:'14-2',t:'미래 조직 구조',          g:'조직', f:v13b},
     {id:'v14',n:'15',t:'인건비 절감 방안',          g:'전략 설계', f:v14},
     {id:'v15',n:'16',t:'인재 육성 전략',            g:'전략 설계', f:v15},
     {id:'v16',n:'17',t:'복리후생 강화 전략',        g:'전략 설계', f:v16},
@@ -1923,7 +2187,7 @@
     cur=id; buildNav();
     var v=VIEWS.filter(function(x){return x.id===id;})[0];
     var el=document.getElementById('content');
-    applyFilter();
+    applyFilter(!!KR_BASE_VIEWS[id]);
     if(CO==='대만법인' && scopeOf(id)==='kr'){
       el.innerHTML=scopeBanner(id)+
         '<div class="panel flat"><div class="panel-head"><h2>'+esc(v.t)+'</h2>'+
@@ -1975,6 +2239,11 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vjc'){
+      document.querySelectorAll('[data-vjc]').forEach(function(b){
+        b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
+      });
     }
     if(id==='v12'){
       var s=document.getElementById('sevSel'), iq=document.getElementById('issQ');
