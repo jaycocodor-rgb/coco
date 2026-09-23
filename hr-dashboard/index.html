@@ -1648,8 +1648,9 @@
   function vAp(){
     var P=D.applyDesk, recs=noP(P.records);
     var eduN=(P.fill.filter(function(f){return f.항목==='학력';})[0]||{}).기재||0;
-    var h=head('5-1. 입사원서 조회','인사마스터의 입사 관련 항목과 계약급여 3시점을 직원별로 펼칩니다. '+
-      '입사지원서·이력서·적성검사 원본은 아직 확보되지 않았습니다.',['part','일부 결측']);
+    var DB=D.hrDb;
+    var h=head('5-1. 입사원서 · 이력 조회','직원 DB에 있어야 할 '+DB.총항목+'개 항목 중 확보 '+DB.확보항목+
+      ' · 부분 '+DB.부분항목+' · <b>없음 '+DB.없음항목+'</b>입니다. 학력·경력·면접·이력서 칸을 만들어 두고 비어 있는 곳을 표시했습니다.',['part','일부 결측']);
     h+='<div class="kpi-row">'+
       kpi('조회 대상',recs.length+'명','재직+휴직 · '+P.기준일,'lead')+
       kpi('학력 기재',eduN+'명',pct(eduN/P.대상)+' · 나머지는 빈칸','bad')+
@@ -1658,7 +1659,8 @@
       kpi('과거 연봉','3시점','2024-09 / 2025-07 / 2026-02')+
       kpi('원본 서류',P.미보유.filter(function(x){return x.상태==='미확보';}).length+'종 미확보','이력서·적성검사 등','bad')+
       '</div>';
-    var T=[['조회','① 직원별 조회'],['기재','② 기재 현황'],['학력','③ 학력·전공'],['서류','④ 미보유 자료']];
+    var T=[['조회','① 직원별 조회'],['기재','② 기재 현황'],['학력','③ 학력·전공'],
+           ['DB','④ 직원 DB 항목'],['면접','⑤ 면접 기록'],['서류','⑥ 미보유 자료·요청']];
     h+='<div class="searchbar">'+T.map(function(t){
       return '<button class="nav-item'+(vapTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vap="'+t[0]+'">'+t[1]+'</button>';
     }).join('')+'</div>';
@@ -1714,6 +1716,73 @@
                  {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], P.전공분포)+'</div>'+
         '</div>',true);
     }
+    if(vapTab==='DB'){
+      h+=panel('직원 DB 항목 — 확보 현황','인사 DB가 갖춰야 할 항목을 영역별로 놓고, 지금 무엇이 들어 있는지 표시했습니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('총 항목',DB.총항목+'개','6개 영역','lead')+
+          kpi('확보',DB.확보항목+'개',pct(DB.확보항목/DB.총항목),'')+
+          kpi('부분',DB.부분항목+'개',pct(DB.부분항목/DB.총항목),'warn')+
+          kpi('없음',DB.없음항목+'개',pct(DB.없음항목/DB.총항목),'bad')+
+        '</div>'+
+        DB.schema.map(function(g){
+          return '<div style="margin-bottom:13px"><div style="font-size:12.5px;font-weight:700;margin-bottom:5px">'+
+            esc(g.영역)+' <span class="muted" style="font-weight:400">— 확보 '+g.확보+' · 부분 '+g.부분+' · 없음 '+g.없음+'</span></div>'+
+            table([
+              {label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+              {label:'상태',render:function(r){
+                var c={'확보':'참고','부분':'주의','없음':'치명'}[r.상태];
+                return '<span class="sev '+c+'">'+esc(r.상태)+'</span>';}},
+              {label:'원본',render:function(r){return esc(r.원본);}},
+              {label:'확보 인원',num:true,render:function(r){
+                return r.확보===null?'<span class="muted">-</span>':(r.확보?cnt(r.확보)+'명':'<span class="muted">0</span>');}},
+              {label:'확보율',num:true,cls:'strong',render:function(r){
+                if(r.확보율===null) return '<span class="muted">-</span>';
+                return '<b class="'+(r.확보율<0.5?'neg':(r.확보율>=0.95?'pos':''))+'">'+pct(r.확보율)+'</b>';}},
+              {label:'비고',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:30ch">'+esc(r.비고||'-')+'</span>';}}
+            ], g.목록)+'</div>';
+        }).join(''));
+      h+=panel('채우면 무엇을 할 수 있나','',
+        '<div class="cards">'+DB.활용.map(function(u){
+          return '<div class="card"><h3>'+esc(u.용도)+'</h3><p>'+esc(u.내용)+'</p></div>';
+        }).join('')+'</div>',true);
+    }
+
+    if(vapTab==='면접'){
+      h+=panel('면접 기록 — 원본 없음','면접 기록이 하나도 없습니다. 아래 틀로 주시면 그대로 붙습니다.',
+        '<div class="cards" style="margin-bottom:12px">'+
+        '<div class="card" style="border-color:var(--crit)"><div class="eyebrow">미확보</div>'+
+        '<h3>면접 기록 0건</h3><p>면접일·면접관·평가·합불 기록이 인사시스템에도 별도 파일에도 없습니다. '+
+        '채용이 잘 된 것인지 아닌지 판단할 근거가 지금은 없습니다.</p></div>'+
+        '<div class="card"><h3>왜 필요한가</h3><p>9-1에서 <b>1년 내 퇴사 56.9%</b>, <b>3개월 내 퇴사 26.8%</b>가 나왔습니다. '+
+        '면접 점수와 1년 후 재직 여부를 붙여야 어느 평가항목이 정착을 예측하는지 알 수 있습니다.</p></div>'+
+        '<div class="card"><h3>6-1과 연결</h3><p>면접 척도를 다면평가와 같은 5점으로 맞추면 '+
+        '「채용 때 본 것」과 「일하며 드러난 것」을 같은 자로 비교할 수 있습니다.</p></div>'+
+        '</div>'+
+        table([
+          {label:'칸 이름',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+          {label:'구분',render:function(r){
+            var c={'필수':'치명','권장':'주의','선택':'참고','입사자만':'참고'}[r.구분]||'참고';
+            return '<span class="sev '+c+'">'+esc(r.구분)+'</span>';}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.설명||'-')+'</span>';}}
+        ], DB.interviewCols));
+      h+=panel('경력사항 시트 틀','이전 직장 이력입니다. 경력 1건당 1행으로 받습니다.',
+        table([
+          {label:'칸 이름',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+          {label:'구분',render:function(r){
+            var c={'필수':'치명','권장':'주의','선택':'참고'}[r.구분]||'참고';
+            return '<span class="sev '+c+'">'+esc(r.구분)+'</span>';}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.설명||'-')+'</span>';}}
+        ], DB.careerCols));
+      h+=panel('학력 보강 시트 틀','지금 있는 학력·학교·전공에 졸업연도·졸업구분·자격증·어학을 더합니다.',
+        table([
+          {label:'칸 이름',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+          {label:'구분',render:function(r){
+            var c={'필수':'치명','권장':'주의','선택':'참고'}[r.구분]||'참고';
+            return '<span class="sev '+c+'">'+esc(r.구분)+'</span>';}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.설명||'-')+'</span>';}}
+        ], DB.eduCols));
+    }
+
     if(vapTab==='서류'){
       h+=panel('입사 관련 원본 자료','아래 자료를 주시면 이 메뉴에 그대로 붙습니다.',
         table([
@@ -1727,6 +1796,13 @@
           ['어디에 쓰나','6-1 다면평가 결과와 교차하면 「채용 때 본 것」과 「일하며 드러난 것」의 차이를 볼 수 있습니다. 조기 이탈 56.9%의 채용 단계 신호를 찾는 작업입니다.'],
           ['주의','적성검사 결과는 민감정보에 준해 다룹니다. 개인별 점수는 인사파트만 보고, 대시보드에는 구간·집계로만 올리는 것을 권합니다.']
         ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+      h+=panel('인사파트 자료 요청 — 보낸 내용','2026-09-23 인사파트에 아래 다섯 가지를 요청했습니다. 받는 대로 이 메뉴에 붙습니다.',
+        '<div class="cards">'+DB.요청.항목.map(function(t,i){
+          return '<div class="card" style="border-color:var(--accent)"><div class="eyebrow">요청 '+(i+1)+'</div>'+
+            '<p style="margin:0;font-size:12.5px;color:var(--ink)"><b>'+esc(t)+'</b></p></div>';
+        }).join('')+'</div>'+
+        '<p style="margin-top:10px;font-size:12px;color:var(--ink-2)">요청 형식 — '+esc(DB.요청.형식)+
+        '. 칸 이름과 필수 여부는 ⑤ 면접 기록 탭의 세 가지 시트 틀을 그대로 쓰면 됩니다.</p>',true);
     }
     h+=note('※ 출처 — '+esc(P.출처)+'. '+P.한계.join(' '));
     h+=hideNote();
@@ -3154,7 +3230,7 @@
     {id:'v3', n:'3', t:'월별 카테고리별 지급',       g:'인건비 현황', f:v3},
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
     {id:'v5', n:'5', t:'개인별 급여 히스토리',       g:'직원', f:v5},
-    {id:'vap',n:'5-1',t:'입사원서 조회',             g:'직원', f:vAp},
+    {id:'vap',n:'5-1',t:'입사원서 · 이력 조회',      g:'직원', f:vAp},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
     {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
