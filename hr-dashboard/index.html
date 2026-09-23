@@ -253,8 +253,8 @@
   function coLabel(){ return CO==='전체'?'3개 법인 전체':CO; }
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
-    var KR_ONLY={v1:1,vjc:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
-    var MASTER={vhm:1,vcal:1,vrv:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    var KR_ONLY={v1:1,vjc:1,vpay:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
+    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
     if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
@@ -790,7 +790,60 @@
   }
 
   /* ================= 5. 개인별 급여 히스토리 ================= */
-  var v5Sel=null, v5Dept='전체';
+  var v5Q='';
+  /* 팀(기능 본부) → 파트(급여대장 소속). 기능 본부는 FMAP 으로 전 소속을 덮는다.
+     조직도(2026-09-28) 본부는 매핑률이 57%라 팀 층으로 쓰지 않고, 대응되는 파트에만 꼬리표로 붙인다. */
+  var FN_ORDER=['생산·물류','영업·마케팅','상품·연구개발','경영지원','기타'];
+  function orgUnitOf(dept){
+    var r=(D.orgNow.부서급여||[]).filter(function(x){return x.매핑 && x.급여소속===dept;})[0];
+    return r?r.본부:null;
+  }
+  function deptTree(){
+    var base=noP(EMPS), m={};
+    base.forEach(function(e){
+      var f=fnOf(e.소속);
+      var g=m[f]||(m[f]={기능:f,인원:0,인건비:0,파트:{}});
+      g.인원++; g.인건비+=e.지급총액;
+      var d=g.파트[e.소속]||(g.파트[e.소속]={소속:e.소속,인원:0,인건비:0});
+      d.인원++; d.인건비+=e.지급총액;
+    });
+    return FN_ORDER.filter(function(f){return m[f];}).map(function(f){
+      var g=m[f];
+      g.파트목록=Object.keys(g.파트).map(function(k){return g.파트[k];})
+        .sort(function(a,b){return b.인원-a.인원 || (a.소속<b.소속?-1:1);});
+      return g;
+    });
+  }
+  function deptPicker(){
+    var tree=deptTree(), tot=noP(EMPS).length;
+    var h='<div class="panel"><div class="panel-head"><h2>부서 선택</h2>'+
+      '<div class="panel-note">팀(기능 본부)을 누르면 그 팀 전체, 파트를 누르면 그 부서만 봅니다. 괄호 안은 조회 가능한 인원입니다.</div></div>';
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">'+
+       '<button class="co-btn'+(v5Dept==='전체'?' on':'')+'" data-pd="전체">'+
+       '<span class="dot" style="background:var(--accent)"></span>전체<span class="co-n">'+tot+'</span></button></div>';
+    tree.forEach(function(g){
+      var teamKey='FN:'+g.기능, on=(v5Dept===teamKey);
+      h+='<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:8px;background:var(--surface)">'+
+         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px">'+
+         '<button class="co-btn'+(on?' on':'')+'" data-pd="'+esc(teamKey)+'">'+
+         '<span class="dot" style="background:'+FN_COLOR[g.기능]+'"></span><b>'+esc(g.기능)+'</b>'+
+         '<span class="co-n">'+g.인원+'명</span></button>'+
+         '<span style="font-size:10.5px;color:var(--ink-3)">월 '+man(g.인건비)+' · 파트 '+g.파트목록.length+'개</span></div>'+
+         '<div style="display:flex;gap:5px;flex-wrap:wrap">';
+      g.파트목록.forEach(function(d){
+        var ou=orgUnitOf(d.소속), sel=(v5Dept===d.소속);
+        h+='<button class="co-btn'+(sel?' on':'')+'" data-pd="'+esc(d.소속)+'" title="'+
+           esc(d.소속+(ou?' · 조직도 '+ou:''))+'">'+esc(d.소속)+
+           (ou?'<span style="font-size:9.5px;opacity:.6">'+esc(ou)+'</span>':'')+
+           '<span class="co-n">'+d.인원+'</span></button>';
+      });
+      h+='</div></div>';
+    });
+    h+='</div>';
+    return h;
+  }
+
+  var v5Sel=null, v5Dept='전체';   /* '전체' | 'FN:<기능본부>' | '<소속>' */
   function v5(){
     var m=D.historyMeta;
     var h=head('5. 개인별 급여 히스토리 조회','이름으로 찾아 2026-02 급여명세를 항목별로 열람하고, 계약급여 3개 시점과 수당·휴가 현황을 함께 봅니다.',['part','3개 시점']);
@@ -800,11 +853,11 @@
       kpi('연환산 인상률(중위)',pct(D.raiseSummary.연환산_중위),'정상재직 '+D.raiseSummary.정상비교+'명')+
       kpi('월 인건비 증가',man(D.raiseSummary.월인건비증가),D.raiseSummary.기간)+
       '</div>';
-    var depts=['전체'].concat(BYDEPT.map(function(d){return d.소속;}));
-    h+='<div class="searchbar"><input id="pQ" type="search" placeholder="직원 이름 또는 사번 검색"><select id="pDept">'+
-      depts.map(function(d){return '<option'+(d===v5Dept?' selected':'')+'>'+esc(d)+'</option>';}).join('')+'</select></div>';
+    h+=deptPicker();
+    h+='<div class="searchbar"><input id="pQ" type="search" placeholder="직원 이름 또는 사번 검색" value="'+esc(v5Q)+'"></div>';
     h+='<div style="display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:13px" id="pGrid">'+
-       '<div class="person-list" id="pList"></div><div id="pDetail"></div></div>';
+       '<div><div id="pLab" class="foot-note" style="padding:0 2px 6px"></div>'+
+       '<div class="person-list" id="pList"></div></div><div id="pDetail"></div></div>';
     h+=note('※ '+esc(m.비고)+' '+esc(D.personYearMeta.휴가));
     h+=hideNote();
     return h;
@@ -812,11 +865,17 @@
   function renderPeople(){
     var q=((document.getElementById('pQ')||{}).value||'').trim().toLowerCase();
     var list=noP(EMPS).filter(function(e){
-      if(v5Dept!=='전체' && e.소속!==v5Dept) return false;
+      if(v5Dept!=='전체'){
+        if(v5Dept.indexOf('FN:')===0){ if(fnOf(e.소속)!==v5Dept.slice(3)) return false; }
+        else if(e.소속!==v5Dept) return false;
+      }
       if(!q) return true;
       return (e.성명+' '+(e.직원번호||'')).toLowerCase().indexOf(q)>=0;
     });
     var el=document.getElementById('pList'); if(!el) return;
+    var lab=document.getElementById('pLab');
+    if(lab) lab.innerHTML=(v5Dept==='전체'?'전체':(v5Dept.indexOf('FN:')===0?esc(v5Dept.slice(3))+' 팀':esc(v5Dept)))+
+      ' · <b>'+list.length+'명</b>'+(q?' · 검색 "'+esc(q)+'"':'');
     if(!list.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">검색 결과가 없습니다.</div>'; v5Sel=null; }
     else{
       if(!v5Sel || !list.some(function(e){return (e.직원번호||e.성명)===(v5Sel.직원번호||v5Sel.성명);})) v5Sel=list[0];
@@ -1582,6 +1641,417 @@
         {label:'국적',render:function(r){return dash(r.국적);}},
         {label:'퇴직사유',render:function(r){return r.퇴직사유?'<span class="sev 주의">'+esc(r.퇴직사유)+'</span>':'<span class="muted">미기재</span>';}}
       ], rows, '520px', function(r){return (r.근속년수!==null&&r.근속년수<0.25)?'stripe-치명':'';}));
+  }
+
+  /* ================= 5-1. 입사원서 조회 ================= */
+  var vapTab='조회', vapSel=null, vapQ='';
+  function vAp(){
+    var P=D.applyDesk, recs=noP(P.records);
+    var eduN=(P.fill.filter(function(f){return f.항목==='학력';})[0]||{}).기재||0;
+    var h=head('5-1. 입사원서 조회','인사마스터의 입사 관련 항목과 계약급여 3시점을 직원별로 펼칩니다. '+
+      '입사지원서·이력서·적성검사 원본은 아직 확보되지 않았습니다.',['part','일부 결측']);
+    h+='<div class="kpi-row">'+
+      kpi('조회 대상',recs.length+'명','재직+휴직 · '+P.기준일,'lead')+
+      kpi('학력 기재',eduN+'명',pct(eduN/P.대상)+' · 나머지는 빈칸','bad')+
+      kpi('채용구분 기재',(P.fill.filter(function(f){return f.항목==='채용구분';})[0]||{}).기재+'명','코드표 없음','warn')+
+      kpi('입사추천자',(P.fill.filter(function(f){return f.항목==='입사추천자';})[0]||{}).기재+'명','추천 채용 추적 불가','bad')+
+      kpi('과거 연봉','3시점','2024-09 / 2025-07 / 2026-02')+
+      kpi('원본 서류',P.미보유.filter(function(x){return x.상태==='미확보';}).length+'종 미확보','이력서·적성검사 등','bad')+
+      '</div>';
+    var T=[['조회','① 직원별 조회'],['기재','② 기재 현황'],['학력','③ 학력·전공'],['서류','④ 미보유 자료']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vapTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vap="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vapTab==='조회'){
+      h+='<div class="searchbar"><input id="apq" type="search" placeholder="이름·부서·학교·전공 검색" value="'+esc(vapQ)+'"></div>';
+      h+='<div style="display:grid;grid-template-columns:minmax(0,290px) minmax(0,1fr);gap:13px">'+
+         '<div class="person-list" id="apList"></div><div id="apCard"></div></div>';
+      h+=note('※ '+esc(P.코드주의));
+    }
+    if(vapTab==='기재'){
+      h+=panel('입사원서 항목 기재 현황','인사시스템에 실제로 들어 있는 비율입니다. 낮은 항목부터 채워야 조회가 의미를 갖습니다.',
+        table([
+          {label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'기재',num:true,cls:'strong',render:function(r){return cnt(r.기재)+'명';}},
+          {label:'미기재',num:true,render:function(r){return r.미기재?'<b class="neg">'+cnt(r.미기재)+'명</b>':'<span class="muted">0</span>';}},
+          {label:'기재율',num:true,render:function(r){
+            return '<b class="'+(r.기재율<0.5?'neg':(r.기재율>=0.95?'pos':''))+'">'+pct(r.기재율)+'</b>';}},
+          {label:'',render:function(r){return bar(r.기재율,1);}}
+        ], P.fill));
+      h+=panel('민감정보 집계','보훈·장애·결혼·병역은 민감정보라 개인별로 내보내지 않고 집계만 둡니다.',
+        '<div class="cards">'+Object.keys(P.민감집계).map(function(k){
+          return '<div class="card"><h3>'+esc(k)+'</h3>'+
+            table([{label:'값',render:function(r){return esc(r.값);}},
+                   {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], P.민감집계[k])+'</div>';
+        }).join('')+'</div>',true);
+      h+=panel('먼저 채워야 할 것','',
+        '<div class="cards">'+[
+          ['학력·학교·전공 — 기재율 '+pct((P.fill.filter(function(f){return f.항목==='학력';})[0]||{}).기재율),
+           '3분의 2가 비어 있어 개인별 조회를 열면 대부분 빈칸입니다. 채용 시 입력을 필수값으로 걸어야 합니다.'],
+          ['채용구분 코드표','01/02/03 코드만 있고 무엇을 뜻하는지 정의가 없습니다. 화면의 이름표(공개채용·추천·경력)는 추정입니다.'],
+          ['입사추천자 — 1명','17번 「추천 채용 보상제」를 하려면 추천인 기록이 있어야 합니다. 지금은 추적이 불가능합니다.']
+        ].map(function(c){return '<div class="card" style="border-color:var(--warn)"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+    }
+    if(vapTab==='학력'){
+      h+=panel('학력 분포','기재된 '+eduN+'명 기준입니다.',
+        table([{label:'학력',render:function(r){return '<b>'+esc(r.값)+'</b>';}},
+               {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+               {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+               {label:'',render:function(r){return bar(r.인원,maxOf(P.학력분포,function(x){return x.인원;}));}}], P.학력분포));
+      h+=panel('채용구분','원본은 코드입니다. 이름표는 추정이라 확정 전 인사파트 확인이 필요합니다.',
+        table([{label:'구분',render:function(r){return '<b>'+esc(r.값)+'</b>';}},
+               {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+               {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+               {label:'',render:function(r){return bar(r.인원,maxOf(P.채용구분분포,function(x){return x.인원;}));}}], P.채용구분분포));
+      h+=panel('학교 · 전공 (기재분)','',
+        '<div class="cards">'+
+        '<div class="card"><h3>학교</h3>'+
+          table([{label:'학교',render:function(r){return esc(r.값);}},
+                 {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], P.학교분포)+'</div>'+
+        '<div class="card"><h3>전공</h3>'+
+          table([{label:'전공',render:function(r){return esc(r.값);}},
+                 {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], P.전공분포)+'</div>'+
+        '</div>',true);
+    }
+    if(vapTab==='서류'){
+      h+=panel('입사 관련 원본 자료','아래 자료를 주시면 이 메뉴에 그대로 붙습니다.',
+        table([
+          {label:'자료',render:function(r){return '<b>'+esc(r.자료)+'</b>';}},
+          {label:'상태',render:function(r){return '<span class="sev '+(r.상태==='미확보'?'치명':'주의')+'">'+esc(r.상태)+'</span>';}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal">'+esc(r.설명)+'</span>';}}
+        ], P.미보유));
+      h+=panel('적성검사를 붙이려면','',
+        '<div class="cards">'+[
+          ['필요한 것','검사기관·검사명·시행일·응시자·결과 코드(또는 점수). 개인별 결과지 PDF가 있으면 파일명 규칙만 정하면 됩니다.'],
+          ['어디에 쓰나','6-1 다면평가 결과와 교차하면 「채용 때 본 것」과 「일하며 드러난 것」의 차이를 볼 수 있습니다. 조기 이탈 56.9%의 채용 단계 신호를 찾는 작업입니다.'],
+          ['주의','적성검사 결과는 민감정보에 준해 다룹니다. 개인별 점수는 인사파트만 보고, 대시보드에는 구간·집계로만 올리는 것을 권합니다.']
+        ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+    }
+    h+=note('※ 출처 — '+esc(P.출처)+'. '+P.한계.join(' '));
+    h+=hideNote();
+    return h;
+  }
+  function renderApply(){
+    var el=document.getElementById('apList'); if(!el) return;
+    var q=vapQ.trim().toLowerCase();
+    var list=noP(D.applyDesk.records).filter(function(r){
+      if(!q) return true;
+      return ((r.성명||'')+' '+(r.소속||'')+' '+(r.학교||'')+' '+(r.전공||'')+' '+(r.직원번호||'')).toLowerCase().indexOf(q)>=0;
+    });
+    if(!list.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">검색 결과가 없습니다.</div>'; vapSel=null; }
+    else{
+      if(!vapSel || !list.some(function(r){return r.직원번호===vapSel.직원번호;})) vapSel=list[0];
+      el.innerHTML=list.map(function(r){
+        var sel=r.직원번호===vapSel.직원번호;
+        return '<button class="person-row" aria-selected="'+(sel?'true':'false')+'" data-ap="'+esc(r.직원번호)+'">'+
+          '<span><b>'+esc(r.성명)+'</b><br><span class="sub">'+esc(r.소속||'-')+' · '+esc(r.직위||'-')+'</span></span>'+
+          '<span class="num" style="font-size:11px;text-align:right">'+esc((r.입사일||'').slice(0,7))+
+          '<br><span class="sub">'+(r.근속년수?r.근속년수+'년':'-')+'</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-ap]').forEach(function(b){
+        b.addEventListener('click',function(){
+          vapSel=D.applyDesk.records.filter(function(r){return r.직원번호===b.getAttribute('data-ap');})[0];
+          renderApply();
+        });
+      });
+    }
+    renderApplyCard();
+  }
+  function renderApplyCard(){
+    var el=document.getElementById('apCard'); if(!el) return;
+    var r=vapSel;
+    if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 직원을 선택하세요.</div></div>'; return; }
+    function kv(rows){
+      return '<dl class="kv">'+rows.map(function(x){
+        return '<dt>'+esc(x[0])+'</dt><dd>'+(x[1]?esc(x[1]):'<span class="muted">미기재</span>')+'</dd>';
+      }).join('')+'</dl>';
+    }
+    var h='<div class="panel flat"><div class="panel-head"><h2>'+esc(r.성명)+
+      ' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(r.직원번호)+'</span> '+
+      gradeChip(r.등급)+'</h2><div class="panel-note">입사원서 · 인사마스터 '+esc(D.applyDesk.기준일)+'</div></div>';
+    h+='<div class="cards">'+
+      '<div class="card"><h3>기본</h3>'+kv([
+        ['법인',r.법인],['소속',r.소속],['직위',r.직위],['직책',r.직책==='님'?null:r.직책],
+        ['고용형태',r.고용형태],['급여유형',r.급여유형],['재직상태',r.재직상태],['국적',r.국적]])+'</div>'+
+      '<div class="card"><h3>입사</h3>'+kv([
+        ['입사일',r.입사일],['그룹 입사일',r.그룹입사일],
+        ['근속',r.근속년수?r.근속년수+'년':null],
+        ['채용구분',r.채용구분?(r.채용구분명+' ('+r.채용구분+')'):null],
+        ['입사추천자',r.입사추천자],
+        ['최근 승진일',r.승진일자],['승진 소요',r.승진연수]])+'</div>'+
+      '<div class="card"><h3>학력</h3>'+kv([
+        ['학력',r.학력],['학교',r.학교],['전공',r.전공]])+
+        (r.학력?'':'<p style="margin-top:8px;font-size:11.5px;color:var(--crit)">인사시스템에 학력 정보가 없습니다.</p>')+'</div>'+
+      '</div>';
+    var Y=[['2024-09',r.연봉_2024_09],['2025-07',r.연봉_2025_07],['2026-02',r.연봉_2026_02]];
+    h+='<div class="panel-head" style="margin-top:14px"><h2>과거 연봉 (계약급여)</h2>'+
+       '<div class="panel-note">입사 당시 연봉은 원본이 없어 확보된 3시점만 표시합니다.</div></div>';
+    h+='<div class="kpi-row">'+Y.map(function(y){
+        return kpi(y[0],y[1]?won(y[1]):'<span style="font-size:14px">기록 없음</span>',y[1]?man(y[1]*12)+' 연환산':'');
+      }).join('')+
+      kpi('누적 인상률',spct(r.누적인상률),'2024-09 → 2026-02')+
+      kpi('연환산 인상률',spct(r.연환산인상률),'등급 '+(r.등급||'-'))+
+      '</div>';
+    h+='<div class="panel-head" style="margin-top:6px"><h2>입사 서류 보관</h2>'+
+       '<div class="panel-note">원본이 확보되지 않아 전 직원 공통으로 미확보 상태입니다.</div></div>';
+    h+='<div class="cards">'+D.applyDesk.미보유.map(function(x){
+        return '<div class="card" style="border-color:'+(x.상태==='미확보'?'var(--crit)':'var(--warn)')+'">'+
+          '<div class="eyebrow">'+esc(x.상태)+'</div><h3 style="font-size:13px">'+esc(x.자료)+'</h3></div>';
+      }).join('')+'</div>';
+    h+='</div>';
+    el.innerHTML=h;
+  }
+
+  /* ================= 7-1. 수당 상세 리스팅 ================= */
+  var vpayTab='부서', vpayQ='', vpayItem='고정연장수당', vpaySort='금액';
+  var ALLOW_ALL = CONTRACT.concat(VARIABLE);
+  function payHas(item){ return noP(EMPS).some(function(e){ return e[item]; }); }
+  function vPay(){
+    var base=noP(EMPS);
+    var live=ALLOW_ALL.filter(payHas);
+    var sumOf=function(it){ return base.reduce(function(a,e){return a+(e[it]||0);},0); };
+    var cntOf=function(it){ return base.filter(function(e){return e[it];}).length; };
+    var totAll=base.reduce(function(a,e){return a+e.지급총액;},0);
+    var totBase=base.reduce(function(a,e){return a+e.기본급;},0);
+    var h=head('7-1. 수당 상세 리스팅','기본급 외 '+live.length+'개 수당 항목을 부서별·개인별·항목별로 모두 펼칩니다. '+
+      D.asOf+' 급여대장 기준.',['fact','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('수당 항목',live.length+'개','계약 '+CONTRACT.filter(payHas).length+' · 변동 '+VARIABLE.filter(payHas).length,'lead')+
+      kpi('수당 총액',man(totAll-totBase),'지급총액의 '+pct((totAll-totBase)/totAll))+
+      kpi('최대 항목','고정연장수당',man(sumOf('고정연장수당'))+' · '+cntOf('고정연장수당')+'명')+
+      kpi('조회 인원',base.length+'명','임원·본부장 제외')+
+      kpi('식대',won(sumOf('식대')),'전원 미지급',sumOf('식대')?'':'bad')+
+      '</div>';
+    var T=[['부서','① 부서별'],['개인','② 개인별'],['항목','③ 항목별']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vpayTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vpay="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vpayTab==='부서'){
+      var m={};
+      base.forEach(function(e){
+        var g=m[e.소속]||(m[e.소속]={소속:e.소속,인원:0,지급총액:0,기본급:0});
+        g.인원++; g.지급총액+=e.지급총액; g.기본급+=e.기본급;
+        live.forEach(function(it){ g[it]=(g[it]||0)+(e[it]||0); });
+      });
+      var rows=Object.keys(m).map(function(k){
+        var g=m[k]; g.수당계=g.지급총액-g.기본급;
+        g.수당비중=g.지급총액?g.수당계/g.지급총액:0; return g;
+      }).sort(function(a,b){return b.수당계-a.수당계;});
+      var cols=[
+        {label:'소속',render:function(r){return fnDot(r.소속)+' <b>'+esc(r.소속)+'</b>';}},
+        {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+        {label:'기본급',num:true,render:function(r){return won(r.기본급);}},
+        {label:'수당계',num:true,cls:'strong',render:function(r){return won(r.수당계);}},
+        {label:'수당비중',num:true,render:function(r){
+          return '<b class="'+(r.수당비중>=0.3?'neg':'')+'">'+pct(r.수당비중)+'</b>';}}
+      ];
+      live.forEach(function(it){
+        cols.push({label:it,num:true,render:function(r){
+          return r[it]?won(r[it]):'<span class="muted">-</span>';}});
+      });
+      h+=panel('부서별 수당 전개 ('+rows.length+'개 부서 × '+live.length+'개 항목)',
+        '가로로 스크롤하면 전 수당 항목이 나옵니다. 수당계 = 지급총액 − 기본급.',
+        table(cols, rows, '560px'));
+      h+=panel('항목별 합계','',
+        table([
+          {label:'항목',render:function(r){return '<b>'+esc(r.it)+'</b>';}},
+          {label:'구분',render:function(r){return '<span class="tag '+(CONTRACT.indexOf(r.it)>=0?'plan':'part')+'">'+
+            (CONTRACT.indexOf(r.it)>=0?'계약':'변동')+'</span>';}},
+          {label:'월 총액',num:true,cls:'strong',render:function(r){return won(r.sum);}},
+          {label:'수령 인원',num:true,render:function(r){return cnt(r.n)+'명';}},
+          {label:'수령률',num:true,render:function(r){return pct(r.n/base.length);}},
+          {label:'1인평균',num:true,render:function(r){return r.n?won(r.sum/r.n):'-';}},
+          {label:'지급총액 대비',num:true,render:function(r){return pct(r.sum/totAll);}},
+          {label:'',render:function(r){return bar(Math.abs(r.sum),maxOf(live.map(function(x){return {v:Math.abs(sumOf(x))};}),function(x){return x.v;}));}}
+        ], live.map(function(it){return {it:it,sum:sumOf(it),n:cntOf(it)};})
+             .sort(function(a,b){return Math.abs(b.sum)-Math.abs(a.sum);})));
+    }
+
+    if(vpayTab==='개인'){
+      h+='<div class="searchbar"><input id="payq" type="search" placeholder="이름·부서 검색" value="'+esc(vpayQ)+'">'+
+         '<select id="paysort">'+[['금액','수당계 많은 순'],['비중','수당비중 높은 순'],['부서','부서순'],['이름','이름순']]
+           .map(function(o){return '<option value="'+o[0]+'"'+(vpaySort===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+
+         '</select></div><div id="paytbl"></div>';
+      h+=note('※ 가로 스크롤로 '+live.length+'개 수당 항목 전체를 볼 수 있습니다. 0원 항목은 「-」로 표시했습니다.');
+    }
+
+    if(vpayTab==='항목'){
+      h+='<div class="searchbar">'+live.map(function(it){
+        return '<button class="co-btn'+(vpayItem===it?' on':'')+'" data-vpi="'+esc(it)+'">'+esc(it)+
+          '<span class="co-n">'+cntOf(it)+'</span></button>';
+      }).join('')+'</div>';
+      var rows=base.filter(function(e){return e[vpayItem];})
+        .map(function(e){return {성명:e.성명,소속:e.소속,직책:e.직책,법인:e.법인,
+          금액:e[vpayItem],지급총액:e.지급총액,비중:e.지급총액?e[vpayItem]/e.지급총액:0};})
+        .sort(function(a,b){return Math.abs(b.금액)-Math.abs(a.금액);});
+      var tot=rows.reduce(function(a,r){return a+r.금액;},0);
+      h+=panel(esc(vpayItem)+' 수령자 '+rows.length+'명',
+        '월 총액 '+won(tot)+' · 1인평균 '+(rows.length?won(tot/rows.length):'-')+' · 수령률 '+pct(rows.length/base.length),
+        table([
+          {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+          {label:'직책',render:function(r){return esc(r.직책);}},
+          {label:esc(vpayItem),num:true,cls:'strong',render:function(r){return won(r.금액);}},
+          {label:'지급총액',num:true,render:function(r){return won(r.지급총액);}},
+          {label:'급여 내 비중',num:true,render:function(r){return pct(r.비중);}},
+          {label:'',render:function(r){return bar(Math.abs(r.금액),maxOf(rows,function(x){return Math.abs(x.금액);}));}}
+        ], rows, '560px'));
+    }
+    h+=hideNote();
+    return h;
+  }
+  function renderPayList(){
+    var el=document.getElementById('paytbl'); if(!el) return;
+    var base=noP(EMPS), live=ALLOW_ALL.filter(payHas), q=vpayQ.trim().toLowerCase();
+    var rows=base.filter(function(e){
+      if(!q) return true;
+      return (e.성명+' '+e.소속+' '+(e.직원번호||'')).toLowerCase().indexOf(q)>=0;
+    }).map(function(e){
+      var o={성명:e.성명,소속:e.소속,직책:e.직책,기본급:e.기본급,지급총액:e.지급총액};
+      o.수당계=e.지급총액-e.기본급; o.수당비중=e.지급총액?o.수당계/e.지급총액:0;
+      live.forEach(function(it){ o[it]=e[it]||0; });
+      return o;
+    });
+    if(vpaySort==='금액') rows.sort(function(a,b){return b.수당계-a.수당계;});
+    else if(vpaySort==='비중') rows.sort(function(a,b){return b.수당비중-a.수당비중;});
+    else if(vpaySort==='부서') rows.sort(function(a,b){return a.소속<b.소속?-1:a.소속>b.소속?1:b.수당계-a.수당계;});
+    else rows.sort(function(a,b){return a.성명<b.성명?-1:1;});
+    var cols=[
+      {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+      {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+      {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+      {label:'직책',render:function(r){return esc(r.직책);}},
+      {label:'기본급',num:true,render:function(r){return won(r.기본급);}},
+      {label:'수당계',num:true,cls:'strong',render:function(r){return won(r.수당계);}},
+      {label:'수당비중',num:true,render:function(r){
+        return '<b class="'+(r.수당비중>=0.35?'neg':'')+'">'+pct(r.수당비중)+'</b>';}}
+    ];
+    live.forEach(function(it){
+      cols.push({label:it,num:true,render:function(r){
+        return r[it]?won(r[it]):'<span class="muted">-</span>';}});
+    });
+    cols.push({label:'지급총액',num:true,render:function(r){return won(r.지급총액);}});
+    el.innerHTML=panel('개인별 수당 전개 ('+rows.length+'명 × '+live.length+'개 항목)','',
+      table(cols, rows, '600px'));
+  }
+
+  /* ================= 8-2. 휴직자 관리 ================= */
+  var vlvSort='개시', vlvFilter='전체';
+  function vLv(){
+    var L=D.leaveDesk, all=L.현재휴직;
+    var rows=all.filter(function(r){
+      if(vlvFilter==='전체') return true;
+      if(vlvFilter==='미정') return r.복직미정;
+      if(vlvFilter==='임박') return r.구분==='90일 내 복직';
+      if(vlvFilter==='경과') return r.구분==='복직일 경과';
+      if(vlvFilter==='장기') return (r.경과일||0)>=365;
+      return true;
+    }).slice();
+    var S={
+      '개시':  function(a,b){ return (a.휴직시작||'')<(b.휴직시작||'')?-1:1; },
+      '개시역': function(a,b){ return (a.휴직시작||'')>(b.휴직시작||'')?-1:1; },
+      '복직':  function(a,b){ var x=a.복직미정?'9999':a.복직예정, y=b.복직미정?'9999':b.복직예정; return x<y?-1:1; },
+      '경과':  function(a,b){ return (b.경과일||0)-(a.경과일||0); },
+      '근속':  function(a,b){ return (b.근속년수||0)-(a.근속년수||0); },
+      '부서':  function(a,b){ return a.소속<b.소속?-1:a.소속>b.소속?1:((a.휴직시작||'')<(b.휴직시작||'')?-1:1); }
+    };
+    rows.sort(S[vlvSort]||S['개시']);
+
+    var h=head('8-2. 휴직자 관리','인사마스터 '+L.기준일+' 기준 현재 휴직 '+L.인원+'명. '+
+      '휴직 개시일·복직 예정일이 모두 있어 기준을 바꿔가며 볼 수 있습니다.',['fact','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('현재 휴직',L.인원+'명','평균 경과 '+cnt(L.평균경과)+'일','lead')+
+      kpi('복직 미정',L.복직미정+'명','종료일 2999-12-31',L.복직미정?'bad':'')+
+      kpi('90일 내 복직',L['90일내복직']+'명','대체인력 정리 필요')+
+      kpi('복직일 경과',L.복직일경과+'명','예정일이 지남',L.복직일경과?'bad':'')+
+      kpi('최장 경과',cnt(L.최장경과)+'일','약 '+(L.최장경과/365).toFixed(1)+'년')+
+      kpi('사유 확인',L.사유확인+'/'+L.인원+'명','2026-02 급여대장에서')+
+      '</div>';
+
+    h+='<div class="searchbar">'+
+      [['전체','전체 '+all.length],['임박','90일 내 복직 '+L['90일내복직']],
+       ['미정','복직 미정 '+L.복직미정],['경과','복직일 경과 '+L.복직일경과],
+       ['장기','1년 이상 휴직 '+all.filter(function(r){return (r.경과일||0)>=365;}).length]]
+      .map(function(o){
+        return '<button class="co-btn'+(vlvFilter===o[0]?' on':'')+'" data-vlf="'+o[0]+'">'+esc(o[1])+'</button>';
+      }).join('')+'</div>';
+    h+='<div class="searchbar"><span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-right:4px">정렬</span>'+
+      [['개시','휴직 개시일 빠른 순'],['개시역','휴직 개시일 늦은 순'],['복직','복직 예정일 순'],
+       ['경과','경과일 긴 순'],['근속','근속 긴 순'],['부서','부서순']]
+      .map(function(o){
+        return '<button class="co-btn'+(vlvSort===o[0]?' on':'')+'" data-vls="'+o[0]+'">'+esc(o[1])+'</button>';
+      }).join('')+'</div>';
+
+    h+=panel('휴직자 '+rows.length+'명',
+      '경과일은 '+L.기준일+' 기준입니다. 「복직 미정」은 시스템에 종료일이 2999-12-31로 들어간 건입니다.',
+      table([
+        {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+        {label:'법인',render:function(r){return esc(r.법인);}},
+        {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+        {label:'직위',render:function(r){return dash(r.직위);}},
+        {label:'사유',render:function(r){return r.사유?'<span class="sev 주의">'+esc(r.사유)+'</span>':'<span class="muted">미기재</span>';}},
+        {label:'휴직 개시',cls:'strong',render:function(r){return esc(r.휴직시작);}},
+        {label:'복직 예정',cls:'strong',render:function(r){
+          return r.복직미정?'<span class="sev 치명">미정</span>':esc(r.복직예정);}},
+        {label:'복직까지',num:true,render:function(r){
+          if(r.복직까지===null) return '<span class="muted">-</span>';
+          if(r.복직까지<0) return '<b class="neg">'+Math.abs(r.복직까지)+'일 경과</b>';
+          return '<b class="'+(r.복직까지<=90?'pos':'')+'">'+cnt(r.복직까지)+'일</b>';}},
+        {label:'경과일',num:true,render:function(r){return cnt(r.경과일)+'일';}},
+        {label:'예정기간',num:true,render:function(r){return r['예정기간(개월)']?r['예정기간(개월)']+'개월':'<span class="muted">-</span>';}},
+        {label:'입사일',render:function(r){return dash(r.입사일);}},
+        {label:'근속',num:true,render:function(r){return r.근속년수?r.근속년수+'년':'<span class="muted">-</span>';}},
+        {label:'',render:function(r){return bar(r.경과일,maxOf(all,function(x){return x.경과일||0;}));}}
+      ], rows, '520px', function(r){return r.복직미정?'stripe-치명':(r.구분==='90일 내 복직'?'stripe-주의':'');}));
+
+    h+=panel('복직 예정 시점','월별로 몇 명이 돌아오는지입니다. 대체인력 해제·재배치 시점을 여기서 잡습니다.',
+      table([
+        {label:'복직 예정 월',render:function(r){return r.월==='미정'?'<span class="sev 치명">미정</span>':'<b>'+esc(r.월)+'</b>';}},
+        {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+        {label:'대상',render:function(r){
+          return '<span style="white-space:normal">'+all.filter(function(x){return x.복직월===r.월;})
+            .map(function(x){return esc(x.성명)+'('+esc(x.소속)+')';}).join(' · ')+'</span>';}},
+        {label:'',render:function(r){return bar(r.인원,maxOf(L.복직월별,function(x){return x.인원;}));}}
+      ], L.복직월별));
+
+    h+=panel('구간 · 사유 · 부서','',
+      '<div class="cards">'+
+      '<div class="card"><h3>복직 시점 구간</h3>'+
+        table([{label:'구분',render:function(r){return esc(r.구분);}},
+               {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], L.구간)+'</div>'+
+      '<div class="card"><h3>사유</h3>'+
+        table([{label:'사유',render:function(r){return esc(r.사유);}},
+               {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], L.사유별)+
+        '<p style="margin-top:7px;font-size:11.5px">사유는 2026-02 급여대장 「참고」 칸에서만 나옵니다. 그 뒤 휴직자는 비어 있습니다.</p></div>'+
+      '<div class="card"><h3>부서</h3>'+
+        table([{label:'소속',render:function(r){return esc(r.소속);}},
+               {label:'인원',num:true,cls:'strong',render:function(r){return r.인원+'명';}}], L.부서별)+'</div>'+
+      '</div>',true);
+
+    h+=panel('2026-02 휴직자 19명은 그 뒤 어떻게 됐나',
+      '급여대장 시점 휴직자를 인사마스터(2026-09-21)에서 추적했습니다. 휴직이 복직으로 이어졌는지 퇴사로 끝났는지 봅니다.',
+      '<div class="kpi-row" style="margin-bottom:10px">'+
+      L.traceSummary.map(function(t){
+        return kpi(t.이후,t.인원+'명',pct(t.인원/L.trace.length),t.이후==='퇴사'?'bad':(t.이후==='복직'?'':'lead'));
+      }).join('')+'</div>'+
+      table([
+        {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+        {label:'법인',render:function(r){return esc(r.법인);}},
+        {label:'소속',render:function(r){return esc(r.소속);}},
+        {label:'사유 (2026-02)',render:function(r){return '<span style="white-space:normal">'+esc(r.사유)+'</span>';}},
+        {label:'근속',num:true,render:function(r){return r.근속년수?r.근속년수+'년':'<span class="muted">-</span>';}},
+        {label:'그 뒤',cls:'strong',render:function(r){
+          var c={'휴직 유지':'주의','복직':'참고','퇴사':'치명'}[r.이후]||'참고';
+          return '<span class="sev '+c+'">'+esc(r.이후)+'</span>';}},
+        {label:'퇴직일',render:function(r){return r.퇴직일?'<b class="neg">'+esc(r.퇴직일)+'</b>':'<span class="muted">-</span>';}}
+      ], L.trace, '400px', function(r){return r.이후==='퇴사'?'stripe-치명':'';}));
+    h+=note('※ 휴직 후 퇴사 '+(L.traceSummary.filter(function(t){return t.이후==='퇴사';})[0]||{인원:0}).인원+
+      '명은 복직 지원이 작동하지 않은 사례입니다. 17번 복리후생 강화 전략에서 복직 프로그램을 다룰 근거입니다.');
+    h+=note('※ '+L.한계.join(' '));
+    return h;
   }
 
   /* ================= 8-1. 근태 달력 ================= */
@@ -2684,11 +3154,14 @@
     {id:'v3', n:'3', t:'월별 카테고리별 지급',       g:'인건비 현황', f:v3},
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
     {id:'v5', n:'5', t:'개인별 급여 히스토리',       g:'직원', f:v5},
+    {id:'vap',n:'5-1',t:'입사원서 조회',             g:'직원', f:vAp},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
     {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
+    {id:'vpay',n:'7-1',t:'수당 상세 리스팅',         g:'직원', f:vPay},
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
     {id:'vcal',n:'8-1',t:'근태 달력 · 휴가계획',     g:'직원', f:vCal},
+    {id:'vlv',n:'8-2',t:'휴직자 관리',              g:'직원', f:vLv},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
     {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
@@ -2761,9 +3234,13 @@
       renderW4();
     }
     if(id==='v5'){
-      var pq=document.getElementById('pQ'), pd=document.getElementById('pDept');
-      if(pq) pq.addEventListener('input',function(){ v5Sel=null; renderPeople(); });
-      if(pd) pd.addEventListener('change',function(){ v5Dept=pd.value; v5Sel=null; renderPeople(); });
+      var pq=document.getElementById('pQ');
+      if(pq) pq.addEventListener('input',function(){ v5Q=pq.value; v5Sel=null; renderPeople(); });
+      document.querySelectorAll('[data-pd]').forEach(function(b){
+        b.addEventListener('click',function(){
+          v5Dept=b.getAttribute('data-pd'); v5Sel=null; go('v5');
+        });
+      });
       renderPeople();
     }
     if(id==='v6'){
@@ -2779,6 +3256,34 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vap'){
+      document.querySelectorAll('[data-vap]').forEach(function(b){
+        b.addEventListener('click',function(){ vapTab=b.getAttribute('data-vap'); go('vap'); });
+      });
+      var aq=document.getElementById('apq');
+      if(aq) aq.addEventListener('input',function(){ vapQ=aq.value; vapSel=null; renderApply(); });
+      renderApply();
+    }
+    if(id==='vpay'){
+      document.querySelectorAll('[data-vpay]').forEach(function(b){
+        b.addEventListener('click',function(){ vpayTab=b.getAttribute('data-vpay'); go('vpay'); });
+      });
+      document.querySelectorAll('[data-vpi]').forEach(function(b){
+        b.addEventListener('click',function(){ vpayItem=b.getAttribute('data-vpi'); go('vpay'); });
+      });
+      var pq2=document.getElementById('payq'), ps=document.getElementById('paysort');
+      if(pq2) pq2.addEventListener('input',function(){ vpayQ=pq2.value; renderPayList(); });
+      if(ps) ps.addEventListener('change',function(){ vpaySort=ps.value; renderPayList(); });
+      renderPayList();
+    }
+    if(id==='vlv'){
+      document.querySelectorAll('[data-vlf]').forEach(function(b){
+        b.addEventListener('click',function(){ vlvFilter=b.getAttribute('data-vlf'); go('vlv'); });
+      });
+      document.querySelectorAll('[data-vls]').forEach(function(b){
+        b.addEventListener('click',function(){ vlvSort=b.getAttribute('data-vls'); go('vlv'); });
+      });
     }
     if(id==='vcal'){
       document.querySelectorAll('[data-vcal]').forEach(function(b){
