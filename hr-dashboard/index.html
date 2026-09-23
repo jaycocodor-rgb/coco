@@ -254,7 +254,7 @@
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
     var KR_ONLY={v1:1,vjc:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
-    var MASTER={vhm:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    var MASTER={vhm:1,vcal:1,vrv:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
     if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
@@ -407,6 +407,19 @@
   }
   function jcPick(sub){ return EMPS.filter(function(e){return e.직군세부===sub;}); }
 
+  /* ================= 개인별 목록 제외 =================
+     임원·본부장은 개인별 목록에서 빼되, 합계·평균·부서집계에는 그대로 포함한다.
+     (빼면 인건비 총액이 틀어진다) */
+  var HIDE_PERSON={'정연재':1,'이민정':1,'정지원':1,'정윤교':1};
+  var HIDE_N=Object.keys(HIDE_PERSON).length;
+  function hideP(r){ return !!(r && HIDE_PERSON[r.성명||r.대상]); }
+  function noP(arr){ return (arr||[]).filter(function(r){ return !hideP(r); }); }
+  function hideNote(n){
+    return note('※ 임원·본부장 '+HIDE_N+'명은 개인별 목록에서 제외했습니다'+
+      (n?' (이 표에서 '+n+'행).':'.')+
+      ' 인건비 합계·1인평균·부서별 집계에는 그대로 들어가 있어 다른 메뉴의 숫자와 어긋나지 않습니다.');
+  }
+
   function AL(name){
     var r=ALLOW.filter(function(x){return x.항목===name;})[0];
     return r||{항목:name,구분:'변동항목',총액:0,수령인원:0,'1인평균':0,비중:0};
@@ -508,7 +521,7 @@
           {label:'1인평균',num:true,cls:'strong',render:function(r){return won(r.월인건비/r.인원);}}
         ], GT.entities));
       if(D.crossPay) h+=panel('확인 필요 — 법인 간 중복 계상','',
-        '<div class="card" style="border-color:var(--crit)"><h3>'+esc(D.crossPay.성명)+' 대표이사</h3><p>'+esc(D.crossPay.내용)+'</p>'+
+        '<div class="card" style="border-color:var(--crit)"><h3>대표이사 (성명 비표기)</h3><p>'+esc(D.crossPay.내용)+'</p>'+
         '<dl class="kv"><dt>한국 (2026-02)</dt><dd>'+won(D.crossPay.한국)+'</dd>'+
         '<dt>대만 (2026-01)</dt><dd>'+won(D.crossPay.대만)+'</dd>'+
         '<dt>합계</dt><dd><b>'+won(D.crossPay.합계)+'</b></dd></dl></div>',true);
@@ -551,7 +564,7 @@
       ], GT.entities, null, null));
 
     if(D.crossPay) h+=panel('확인 필요 — 법인 간 중복 계상','',
-      '<div class="card" style="border-color:var(--crit)"><h3>'+esc(D.crossPay.성명)+' 대표이사</h3><p>'+esc(D.crossPay.내용)+'</p>'+
+      '<div class="card" style="border-color:var(--crit)"><h3>대표이사 (성명 비표기)</h3><p>'+esc(D.crossPay.내용)+'</p>'+
       '<dl class="kv"><dt>한국 (2026-02)</dt><dd>'+won(D.crossPay.한국)+'</dd>'+
       '<dt>대만 (2026-01)</dt><dd>'+won(D.crossPay.대만)+'</dd>'+
       '<dt>합계</dt><dd><b>'+won(D.crossPay.합계)+'</b></dd></dl></div>',true);
@@ -643,7 +656,8 @@
         {label:'회사부담(원)',num:true,render:function(r){return won(r.회사부담계_KRW);}},
         {label:'총원가(원)',num:true,cls:'strong',render:function(r){return won(r.총원가_KRW);}},
         {label:'연봉(원)',num:true,render:function(r){return man(r.연봉_KRW);}}
-      ], t.employees, '520px'));
+      ], noP(t.employees), '520px'));
+    h+=hideNote();
     h+=note('※ 대만 급여대장에는 근속연수별 인상 이력이 함께 기재되어 있습니다. 대만은 한국과 달리 회사가 퇴직금(6%)을 매월 적립하므로 총원가에 포함했습니다. 한국 급여대장에는 퇴직급여충당금이 반영되지 않아 두 법인의 1인평균을 직접 비교할 때 주의가 필요합니다.');
     return h;
   }
@@ -713,7 +727,7 @@
   function renderW4(){
     var el=document.getElementById('w4tbl'); if(!el) return;
     var q=v4Q.trim().toLowerCase();
-    var rows=WORK.filter(function(w){
+    var rows=noP(WORK).filter(function(w){
       if(v4Dept!=='전체' && w.소속!==v4Dept) return false;
       if(!q) return true;
       return (w.성명+' '+w.소속+' '+(w.직원번호||'')).toLowerCase().indexOf(q)>=0;
@@ -772,7 +786,7 @@
         {label:'',render:function(r){return bar(r.휴일근무일수,maxOf(rows,function(x){return x.휴일근무일수;}));}}
       ]);
     }
-    el.innerHTML=panel(title,noteTxt,table(cols,rows,'560px'));
+    el.innerHTML=panel(title,noteTxt,table(cols,rows,'560px'))+hideNote();
   }
 
   /* ================= 5. 개인별 급여 히스토리 ================= */
@@ -792,11 +806,12 @@
     h+='<div style="display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:13px" id="pGrid">'+
        '<div class="person-list" id="pList"></div><div id="pDetail"></div></div>';
     h+=note('※ '+esc(m.비고)+' '+esc(D.personYearMeta.휴가));
+    h+=hideNote();
     return h;
   }
   function renderPeople(){
     var q=((document.getElementById('pQ')||{}).value||'').trim().toLowerCase();
-    var list=EMPS.filter(function(e){
+    var list=noP(EMPS).filter(function(e){
       if(v5Dept!=='전체' && e.소속!==v5Dept) return false;
       if(!q) return true;
       return (e.성명+' '+(e.직원번호||'')).toLowerCase().indexOf(q)>=0;
@@ -925,7 +940,7 @@
     h+='<div class="searchbar"><select id="gSel">'+['전체','A','B','C','D'].map(function(g){
       return '<option'+(g===v6Grade?' selected':'')+'>'+g+'</option>';}).join('')+
       '</select><input id="gQ" type="search" placeholder="이름·부서 검색" value="'+esc(v6Q)+'"></div><div id="gTbl"></div>';
-    if(FL(D.frozen).length) h+=panel('17개월간 인상 없음 ('+FL(D.frozen).length+'명)','근속이 긴 동결자는 이탈 시 대체가 가장 어려운 인원입니다.',
+    if(noP(FL(D.frozen)).length) h+=panel('17개월간 인상 없음 ('+noP(FL(D.frozen)).length+'명)','근속이 긴 동결자는 이탈 시 대체가 가장 어려운 인원입니다.',
       table([
         {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
         {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
@@ -933,21 +948,22 @@
         {label:'입사일',render:function(r){return dash(r.입사일);}},
         {label:'근속',num:true,cls:'strong',render:function(r){return r.근속년수===null?'-':r.근속년수+'년';}},
         {label:'월 계약급여',num:true,render:function(r){return won(r.월계약급여);}}
-      ], FL(D.frozen), '340px'));
-    if(D.raiseStats.이상치.length) h+=panel('인상률 이상치 — 원본 확인 필요','전기 계약급여가 비정상적으로 작아 인상률이 왜곡된 건입니다.',
+      ], noP(FL(D.frozen)), '340px'));
+    if(noP(D.raiseStats.이상치).length) h+=panel('인상률 이상치 — 원본 확인 필요','전기 계약급여가 비정상적으로 작아 인상률이 왜곡된 건입니다.',
       table([
         {label:'성명',render:function(r){return esc(r.성명);}},
         {label:'소속',render:function(r){return esc(r.소속);}},
         {label:'2025-07',num:true,render:function(r){return won(r.전기);}},
         {label:'2026-02',num:true,render:function(r){return won(r.당기);}},
         {label:'인상률',num:true,render:function(r){return '<b class="neg">'+pct(r.인상률,0)+'</b>';}}
-      ], D.raiseStats.이상치));
+      ], noP(D.raiseStats.이상치)));
+    h+=hideNote();
     return h;
   }
   function renderGrade(){
     var el=document.getElementById('gTbl'); if(!el) return;
     var q=v6Q.trim().toLowerCase();
-    var rows=RAISES.filter(function(r){
+    var rows=noP(RAISES).filter(function(r){
       if(v6Grade!=='전체' && r.등급!==v6Grade) return false;
       if(!q) return true;
       return (r.성명+' '+r.소속).toLowerCase().indexOf(q)>=0;
@@ -1568,6 +1584,285 @@
       ], rows, '520px', function(r){return (r.근속년수!==null&&r.근속년수<0.25)?'stripe-치명':'';}));
   }
 
+  /* ================= 8-1. 근태 달력 ================= */
+  var TODAY = '2026-09-23';
+  var HOLI = {
+    '2026-01-01':'신정','2026-02-16':'설 연휴','2026-02-17':'설날','2026-02-18':'설 연휴',
+    '2026-03-01':'삼일절','2026-03-02':'대체공휴일','2026-05-05':'어린이날',
+    '2026-05-24':'부처님오신날','2026-05-25':'대체공휴일','2026-06-06':'현충일',
+    '2026-08-15':'광복절','2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴',
+    '2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절'
+  };
+  var vcalTab='오늘', vcalM='2026-09';
+  function dnum(s){ return s? +s.slice(0,4)*10000 + +s.slice(5,7)*100 + +s.slice(8,10) : 0; }
+  function dadd(s,n){ var d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+  function dow(s){ return ['일','월','화','수','목','금','토'][new Date(s+'T00:00:00').getDay()]; }
+  function isOff(s){ var w=new Date(s+'T00:00:00').getDay(); return HOLI[s]||w===0||w===6; }
+  /* 그날 자리를 비우는 사람 — 휴직·산재 요양 (실데이터) */
+  function absentOn(day){
+    var out=[];
+    (D.hrMaster.leave||[]).forEach(function(r){
+      var st=r.휴직시작, en=r.복직미정?'2999-12-31':r.복직예정;
+      if(st && dnum(st)<=dnum(day) && dnum(day)<dnum(en))
+        out.push({성명:r.성명, 소속:r.소속, 유형:'휴직', 종료:r.복직미정?'미정':r.복직예정});
+    });
+    (D.hrMaster.injury||[]).forEach(function(r){
+      if(r.요양시작 && dnum(r.요양시작)<=dnum(day) && dnum(day)<=dnum(r.요양종료))
+        out.push({성명:r.성명, 소속:'산재 요양', 유형:'요양', 종료:r.요양종료});
+    });
+    return out;
+  }
+  function returnsBetween(a,b){
+    return (D.hrMaster.leave||[]).filter(function(r){
+      return !r.복직미정 && r.복직예정 && dnum(a)<=dnum(r.복직예정) && dnum(r.복직예정)<=dnum(b);
+    });
+  }
+  function apiGap(what){
+    return '<div class="card" style="border-color:var(--warn);background:var(--warn-soft)">'+
+      '<div class="eyebrow">근태 API 미연결</div><h3>'+esc(what)+'는 아직 채울 수 없습니다</h3>'+
+      '<p>5240 근태 API 인증키가 오지 않아 출근·연차 기록이 들어오지 않습니다. 진행 상황은 '+
+      '<b>9-1 ⑥ 근태 API 연계</b> 탭에 있습니다.</p>'+
+      '<p>연결되면 이 자리에 <b>직원번호 · 성명 · 조직 · 출근시간 · 퇴근시간 · 체류시간 · 근무상태 · 특이사항</b>이 그대로 들어옵니다. '+
+      '표와 달력은 그 구조에 맞춰 미리 짜 두었습니다.</p></div>';
+  }
+  function absTable(rows,cap){
+    return table([
+      {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+      {label:'소속',render:function(r){return esc(r.소속);}},
+      {label:'유형',render:function(r){return '<span class="sev '+(r.유형==='요양'?'치명':'주의')+'">'+esc(r.유형)+'</span>';}},
+      {label:'복귀 예정',cls:'strong',render:function(r){return r.종료==='미정'?'<span class="sev 치명">미정</span>':esc(r.종료);}}
+    ], rows);
+  }
+
+  function vCal(){
+    var TT=TODAY, TM=dadd(TT,1);
+    var a0=absentOn(TT), a1=absentOn(TM);
+    var wkS=dadd(TT,7-((new Date(TT+'T00:00:00').getDay()+6)%7)), wkE=dadd(wkS,6);
+    var nm = (TM.slice(0,7)>TT.slice(0,7)) ? TM.slice(0,7) : (+TT.slice(5,7)===12 ? (+TT.slice(0,4)+1)+'-01' : TT.slice(0,4)+'-'+('0'+(+TT.slice(5,7)+1)).slice(-2));
+    var nmS=nm+'-01', nmE=nm+'-31';
+    var h=head('8-1. 근태 달력 · 휴가 계획',
+      '기준일 '+TT+' ('+dow(TT)+'). 출근·연차 기록은 5240 API 연결 전이라 비어 있고, '+
+      '휴직·산재 요양·공휴일은 실데이터로 채워 넣었습니다.',['part','일부 결측']);
+    h+='<div class="kpi-row">'+
+      kpi('오늘 '+TT.slice(5),(HOLI[TT]||isOff(TT))?(HOLI[TT]||'휴무'):'정상 근무일',dow(TT)+'요일',HOLI[TT]?'warn':'')+
+      kpi('오늘 자리 비움',a0.length+'명','휴직 '+a0.filter(function(x){return x.유형==='휴직';}).length+
+          ' · 요양 '+a0.filter(function(x){return x.유형==='요양';}).length)+
+      kpi('내일 '+TM.slice(5),(HOLI[TM]||isOff(TM))?(HOLI[TM]||'휴무'):'정상 근무일',dow(TM)+'요일',HOLI[TM]?'bad':'')+
+      kpi('차주 복직 예정',returnsBetween(wkS,wkE).length+'명',wkS.slice(5)+' ~ '+wkE.slice(5))+
+      kpi('차월 복직 예정',returnsBetween(nmS,nmE).length+'명',nm+'월')+
+      kpi('출근 기록','미연결','API 인증키 대기','bad')+
+      '</div>';
+    var T=[['오늘','① 오늘 근태'],['익일','② 익일 근태'],['차주','③ 차주 휴가계획'],
+           ['차월','④ 차월 휴가계획'],['달력','⑤ 달력']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vcalTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vcal="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vcalTab==='오늘'||vcalTab==='익일'){
+      var day=(vcalTab==='오늘')?TT:TM, ab=(vcalTab==='오늘')?a0:a1;
+      h+=panel(esc(day)+' ('+dow(day)+') '+(HOLI[day]?'— '+esc(HOLI[day]):''),
+        HOLI[day]?'법정공휴일입니다. 출근 대상이 없습니다.':'정상 근무일입니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('근무일 구분',HOLI[day]||(isOff(day)?'주말':'평일'),dow(day)+'요일',HOLI[day]?'bad':'')+
+          kpi('자리 비움',ab.length+'명','휴직·산재 요양')+
+          kpi('출근 인원','-','API 연결 후','bad')+
+          kpi('지각·조퇴','-','API 연결 후','bad')+
+        '</div>'+
+        (ab.length?absTable(ab):'<div class="foot-note">이 날 휴직·요양으로 비는 인원은 없습니다.</div>'));
+      h+=panel('출근 기록','',apiGap(vcalTab==='오늘'?'오늘 근태':'익일 근태'),true);
+      if(HOLI[TM]) h+=note('※ 내일부터 추석 연휴('+
+        Object.keys(HOLI).filter(function(k){return HOLI[k].indexOf('추석')>=0;}).join(', ')+')입니다. 연휴 전 마감 업무를 확인하십시오.');
+    }
+
+    if(vcalTab==='차주'||vcalTab==='차월'){
+      var S=(vcalTab==='차주')?wkS:nmS, E=(vcalTab==='차주')?wkE:nmE;
+      var lab=(vcalTab==='차주')?('차주 '+S+' ~ '+E):('차월 '+nm);
+      var ret=returnsBetween(S,E);
+      var hol=Object.keys(HOLI).filter(function(k){return dnum(S)<=dnum(k)&&dnum(k)<=dnum(E);});
+      var onl=absentOn(S);
+      h+=panel(esc(lab)+' 휴가 계획','신청된 연차는 API 연결 후에 들어옵니다. 지금 확정된 것은 공휴일과 휴직 복직 일정입니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('기간',S.slice(5)+' ~ '+E.slice(5),(vcalTab==='차주')?'7일':'한 달')+
+          kpi('공휴일',hol.length+'일',hol.length?hol.map(function(k){return HOLI[k];}).join(' · '):'없음',hol.length?'warn':'')+
+          kpi('복직 예정',ret.length+'명','자리가 다시 차는 인원')+
+          kpi('기간 초 휴직중',onl.length+'명','대체 인력 필요 구간')+
+          kpi('신청 연차','-','API 연결 후','bad')+
+        '</div>'+
+        (ret.length?table([
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+          {label:'휴직 시작',render:function(r){return esc(r.휴직시작);}},
+          {label:'복직 예정',cls:'strong',render:function(r){return esc(r.복직예정);}},
+          {label:'휴직 기간',num:true,render:function(r){return r['예정기간(개월)']?r['예정기간(개월)']+'개월':'-';}}
+        ], ret):'<div class="foot-note">이 기간에 복직 예정인 인원은 없습니다.</div>'));
+      if(hol.length) h+=panel('이 기간 공휴일','',
+        '<div class="cards">'+hol.map(function(k){
+          return '<div class="card"><div class="eyebrow">'+esc(dow(k))+'요일</div><h3>'+esc(HOLI[k])+'</h3><p>'+esc(k)+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=panel('연차 신청 현황','',apiGap(lab+' 휴가계획'),true);
+    }
+
+    if(vcalTab==='달력'){
+      var ym=vcalM, Y=+ym.slice(0,4), M=+ym.slice(5,7);
+      var first=new Date(Y,M-1,1), last=new Date(Y,M,0);
+      var lead=(first.getDay()+6)%7;   /* 월요일 시작 */
+      var cells=[], i;
+      for(i=0;i<lead;i++) cells.push(null);
+      for(i=1;i<=last.getDate();i++) cells.push(ym+'-'+('0'+i).slice(-2));
+      while(cells.length%7) cells.push(null);
+      var g='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+      ['월','화','수','목','금','토','일'].forEach(function(w,ix){
+        g+='<div style="text-align:center;font-size:10.5px;font-weight:600;padding:4px 0;color:'+
+           (ix>=5?'var(--crit)':'var(--ink-3)')+'">'+w+'</div>';
+      });
+      cells.forEach(function(dy){
+        if(!dy){ g+='<div></div>'; return; }
+        var off=isOff(dy), hl=HOLI[dy], ab=absentOn(dy), today=(dy===TODAY);
+        g+='<div style="min-height:82px;border:1px solid '+(today?'var(--accent)':'var(--border)')+
+           ';border-radius:8px;padding:5px 6px;background:'+(hl?'var(--crit-soft)':off?'var(--surface-alt)':'var(--surface)')+
+           (today?';box-shadow:0 0 0 2px var(--accent-soft)':'')+'">'+
+           '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:11.5px;font-weight:'+(today?'700':'500')+
+           ';color:'+(hl?'var(--crit)':off?'var(--ink-3)':'var(--ink)')+'">'+(+dy.slice(8))+
+           (today?' <span style="font-size:9px;color:var(--accent)">오늘</span>':'')+'</div>'+
+           (hl?'<div style="font-size:9.5px;color:var(--crit);font-weight:600;margin-top:2px">'+esc(hl)+'</div>':'')+
+           (ab.length?'<div style="font-size:9.5px;color:var(--ink-2);margin-top:3px">자리비움 '+ab.length+'명</div>':'')+
+           '</div>';
+      });
+      g+='</div>';
+      var MS=['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06',
+              '2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
+      h+='<div class="searchbar">'+MS.map(function(m){
+        return '<button class="nav-item'+(vcalM===m?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px;padding:5px 9px" data-vcm="'+m+'">'+(+m.slice(5))+'월</button>';
+      }).join('')+'</div>';
+      h+=panel(ym.slice(0,4)+'년 '+(+ym.slice(5))+'월',
+        '붉은 칸은 법정공휴일, 회색은 주말입니다. 「자리비움」은 휴직·산재 요양으로 그날 근무하지 않는 인원입니다. 연차는 API 연결 후 이 칸에 함께 표시됩니다.',
+        g+'<div class="legend" style="margin-top:10px">'+
+        '<span><span class="dot" style="background:var(--crit)"></span>법정공휴일</span>'+
+        '<span><span class="dot" style="background:var(--ink-3)"></span>주말</span>'+
+        '<span><span class="dot" style="background:var(--accent)"></span>오늘</span>'+
+        '<span><span class="dot" style="background:var(--warn)"></span>자리비움(휴직·요양)</span></div>',true);
+    }
+    h+=note('※ 공휴일은 2026년 관공서 공휴일 기준으로 넣었습니다. 출근·연차·출장은 5240 근태 API 연결 후 실측으로 채워집니다 (9-1 ⑥ 탭).');
+    return h;
+  }
+
+  /* ================= 6-1. 다면평가 ================= */
+  var vrvTab='개요';
+  function vRV(){
+    var R=D.review360;
+    var h=head('6-1. 다면평가 (360°) 설계','평가 점수 원본이 없어 6번 A/B/C/D 등급은 인상률을 나눈 값일 뿐입니다. '+
+      '그 자리를 메울 다면평가 제도를 지금 조직 구조 위에 설계했습니다.',['plan','설계안']);
+    h+='<div class="kpi-row">'+
+      kpi('평가 대상',R.대상+'명','휴직 '+R.제외_휴직+'명 제외 · '+R.부서수+'개 부서','lead')+
+      kpi('관리자',R.관리자+'명','관리 스팬 1:'+R.관리스팬)+
+      kpi('총 응답 건수',cnt(R.총응답건)+'건','1인당 '+R['1인평균응답']+'건 작성')+
+      kpi('상향평가 대상',cnt(R.응답구성.상향)+'건','관리자 있는 부서만')+
+      kpi('관리자 공석 부서',R.공석부서.length+'개','상향·하향 평가 불가','bad')+
+      '</div>';
+    var T=[['개요','① 설계 개요'],['매트릭스','② 평가자 매트릭스'],['문항','③ 문항·척도'],
+           ['일정','④ 운영 일정'],['활용','⑤ 결과 활용']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vrvTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vrv="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vrvTab==='개요'){
+      h+=panel('왜 지금 필요한가','',
+        '<div class="cards">'+[
+          ['평가가 없으니 보상 근거도 없다','6번 A/B/C/D는 회사가 집행한 인상률을 4구간으로 나눈 값입니다. '+
+           '성과를 잰 적이 없으니 D등급 '+D.gradeDist[3].인원+'명('+pct(D.gradeDist[3].비중)+')이 성과가 낮아서인지 그냥 방치된 것인지 구분할 수 없습니다.',CRIT_C()],
+          ['관리자가 평가받지 않는다','직책 보유자 '+R.관리자+'명이 1인당 '+R.관리스팬+'명을 봅니다. '+
+           '9-1에서 1년 내 퇴사가 56.9%로 나왔는데, 초기 이탈은 대부분 직속 관리자에게서 갈립니다. 상향평가가 없으면 이 고리를 못 봅니다.',''],
+          ['부서가 잘게 쪼개져 있다','3명 이하 부서가 '+BYDEPT.filter(function(d){return d.인원<=3;}).length+'개입니다. '+
+           '동료평가 모수가 안 나와 본부 단위로 묶어 배정해야 합니다. 이 계산은 ② 탭에 부서별로 있습니다.','']
+        ].map(function(c){return '<div class="card"'+(c[2]?' style="border-color:var(--crit)"':'')+'><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+      h+=panel('평가 주체와 가중치','상사만 보는 하향평가가 아니라 네 방향에서 봅니다.',
+        table([
+          {label:'평가 주체',render:function(r){return '<b>'+esc(r.주체)+'</b>';}},
+          {label:'가중치',num:true,cls:'strong',render:function(r){return pct(r.가중치,0);}},
+          {label:'대상',render:function(r){return esc(r.대상);}},
+          {label:'비고',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:34ch">'+esc(r.비고)+'</span>';}}
+        ], R.weight));
+      h+=panel('응답 구성 (실측 조직 기준)','아래 건수는 지금 조직도·소속으로 실제 계산한 값입니다.',
+        table([
+          {label:'구분',render:function(r){return '<b>'+esc(r.k)+'</b>';}},
+          {label:'건수',num:true,cls:'strong',render:function(r){return cnt(r.v)+'건';}},
+          {label:'비중',num:true,render:function(r){return pct(r.v/R.총응답건);}},
+          {label:'',render:function(r){return bar(r.v,R.응답구성.동료);}}
+        ], [{k:'동료평가(수평)',v:R.응답구성.동료},{k:'자기평가',v:R.응답구성.자기},
+            {k:'하향평가(상사→부하)',v:R.응답구성.하향},{k:'상향평가(부하→상사)',v:R.응답구성.상향}]));
+      h+=panel('미리 막아야 할 것','',
+        '<div class="cards">'+R.리스크.map(function(t){
+          return '<div class="card" style="border-color:var(--warn)"><p style="margin:0">'+esc(t)+'</p></div>';
+        }).join('')+'</div>',true);
+    }
+
+    if(vrvTab==='매트릭스'){
+      h+=panel('부서별 평가자 매트릭스','동료평가는 같은 부서에서 최대 '+R.동료상한+'명을 무작위 배정하는 전제로 계산했습니다.',
+        table([
+          {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+          {label:'대상',num:true,cls:'strong',render:function(r){return cnt(r.대상)+'명';}},
+          {label:'관리자',num:true,render:function(r){return r.관리자?cnt(r.관리자)+'명':'<span class="sev 치명">공석</span>';}},
+          {label:'자기',num:true,render:function(r){return cnt(r.자기평가);}},
+          {label:'동료',num:true,render:function(r){return cnt(r.동료평가);}},
+          {label:'하향',num:true,render:function(r){return r.하향평가?cnt(r.하향평가):'<span class="muted">-</span>';}},
+          {label:'상향',num:true,render:function(r){return r.상향평가?cnt(r.상향평가):'<span class="muted">-</span>';}},
+          {label:'총 응답',num:true,cls:'strong',render:function(r){return cnt(r.총응답)+'건';}},
+          {label:'1인평균',num:true,render:function(r){return r['1인평균응답']+'건';}},
+          {label:'',render:function(r){return bar(r.총응답,maxOf(R.matrix,function(x){return x.총응답;}));}}
+        ], R.matrix, '480px', function(r){return r.관리자공석?'stripe-치명':'';}));
+      h+=panel('관리자 공석 '+R.공석부서.length+'개 부서','직책 보유자가 없어 상향·하향평가를 주고받을 상대가 없습니다. 본부장이 대행하거나 평가 단위를 본부로 올려야 합니다.',
+        '<div class="card" style="border-color:var(--crit)"><p style="margin:0">'+R.공석부서.map(esc).join(' · ')+'</p></div>',true);
+    }
+
+    if(vrvTab==='문항'){
+      h+=panel('척도 (5점)','점수마다 말로 된 기준을 붙여야 관대화가 줄어듭니다.',
+        table([
+          {label:'점수',num:true,cls:'strong',render:function(r){return r.점수+'점';}},
+          {label:'정의',render:function(r){return '<b>'+esc(r.정의)+'</b>';}},
+          {label:'설명',render:function(r){return esc(r.설명);}}
+        ], R.scale));
+      h+=panel('공통 문항 — 전원','',
+        table([{label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+               {label:'문항',render:function(r){return '<span style="white-space:normal">'+esc(r.내용)+'</span>';}}], R.공통문항));
+      h+=panel('직군별 문항','1-1 직군 분류를 그대로 씁니다.',
+        '<div class="cards">'+Object.keys(R.직군문항).map(function(k){
+          return '<div class="card"><h3>'+esc(k)+'</h3>'+
+            R.직군문항[k].map(function(q){return '<p style="margin:6px 0"><b>'+esc(q.항목)+'</b> — '+esc(q.내용)+'</p>';}).join('')+'</div>';
+        }).join('')+'</div>',true);
+      h+=panel('관리자 추가 문항 — '+R.관리자+'명','상향평가에서만 씁니다.',
+        table([{label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+               {label:'문항',render:function(r){return '<span style="white-space:normal">'+esc(r.내용)+'</span>';}}], R.관리자문항));
+    }
+
+    if(vrvTab==='일정'){
+      h+=panel('운영 일정','첫 해는 시범 운영을 거칩니다. 처우 연동은 2년차부터입니다.',
+        '<div class="steps">'+R.schedule.map(function(s,i){
+          return '<div class="step"><div class="qn">'+String(i+1).padStart(2,'0')+'</div><div>'+
+            '<h3>'+esc(s.시기)+'</h3><p>'+esc(s['할 일'])+'</p>'+
+            '<p style="color:var(--ink-3)">주관 — '+esc(s.주관)+'</p></div></div>';
+        }).join('')+'</div>',true);
+    }
+
+    if(vrvTab==='활용'){
+      h+=panel('결과를 어디에 쓰는가','',
+        '<div class="cards">'+R.활용.map(function(u){
+          return '<div class="card"><h3>'+esc(u.용도)+'</h3><p>'+esc(u.내용)+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=panel('지금 등급과의 관계','6번 A/B/C/D는 인상률 구간이고, 다면평가는 성과입니다. 둘을 교차하면 보상이 어긋난 인원이 드러납니다.',
+        table([
+          {label:'',render:function(r){return '<b>'+esc(r.r)+'</b>';}},
+          {label:'평가 상위',render:function(r){return esc(r.hi);}},
+          {label:'평가 하위',render:function(r){return esc(r.lo);}}
+        ], [
+          {r:'인상률 상위 (A·B)', hi:'정상 — 유지', lo:'과대 보상 — 근거 점검'},
+          {r:'인상률 하위 (C·D)', hi:'<b class="neg">이탈 위험 1순위 — 즉시 조정</b>', lo:'육성 또는 배치 전환'}
+        ]));
+    }
+    h+=note('※ '+esc(R.상태)+'. '+esc(R.기준));
+    return h;
+  }
+  function CRIT_C(){ return 1; }
+
   /* ================= 10. 복리후생비 ================= */
   function v10(){
     var w=D.welfare;
@@ -1962,7 +2257,7 @@
         {label:'2025-07 소속',render:function(r){return esc(r['2025-07']);}},
         {label:'2026-02 소속',render:function(r){return fnDot(r['2026-02'])+' '+esc(r['2026-02']);}},
         {label:'직책',render:function(r){return esc(r.직책변화);}}
-      ], FL(D.orgMoves), '400px'));
+      ], noP(FL(D.orgMoves)), '400px'))+hideNote();
     return h;
   }
 
@@ -2390,8 +2685,10 @@
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
     {id:'v5', n:'5', t:'개인별 급여 히스토리',       g:'직원', f:v5},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
+    {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
+    {id:'vcal',n:'8-1',t:'근태 달력 · 휴가계획',     g:'직원', f:vCal},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
     {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
@@ -2482,6 +2779,19 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vcal'){
+      document.querySelectorAll('[data-vcal]').forEach(function(b){
+        b.addEventListener('click',function(){ vcalTab=b.getAttribute('data-vcal'); go('vcal'); });
+      });
+      document.querySelectorAll('[data-vcm]').forEach(function(b){
+        b.addEventListener('click',function(){ vcalM=b.getAttribute('data-vcm'); go('vcal'); });
+      });
+    }
+    if(id==='vrv'){
+      document.querySelectorAll('[data-vrv]').forEach(function(b){
+        b.addEventListener('click',function(){ vrvTab=b.getAttribute('data-vrv'); go('vrv'); });
+      });
     }
     if(id==='vhm'){
       document.querySelectorAll('[data-vhm]').forEach(function(b){
