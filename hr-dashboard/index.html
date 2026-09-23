@@ -254,6 +254,8 @@
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
     var KR_ONLY={v1:1,vjc:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
+    var MASTER={vhm:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
     if(TW_ONLY[id]) return 'tw';
@@ -1326,6 +1328,246 @@
     el.innerHTML=panel(title+' ('+rows.length+'명)',noteTxt,table(cols,rows,'560px'));
   }
 
+  /* ================= 9-1. 인사 마스터 ================= */
+  var vhmTab='이직';
+  function hmTabBar(){
+    var T=[['이직','① 이직률 · 퇴사'],['휴직','② 휴직자'],['구성','③ 인력 구성'],
+           ['법인','④ 그룹 법인'],['산재','⑤ 산업재해'],['근태','⑥ 근태 API 연계']];
+    return '<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vhmTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vhm="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+  }
+  function mixTable(rows,label){
+    return table([
+      {label:label,render:function(r){return '<b>'+esc(r.값)+'</b>';}},
+      {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+      {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+      {label:'',render:function(r){return bar(r.인원,maxOf(rows,function(x){return x.인원;}));}}
+    ], rows);
+  }
+
+  function vHM(){
+    var M=D.hrMaster, T=M.turnover, LS=M.leaverSummary, C=M.composition;
+    var t26=T[T.length-1], t25=T[T.length-2];
+    var h=head('9-1. 인사 마스터 · 이직 / 휴직 / 구성',
+      '5240 인사시스템에서 '+M.기준일+' 뽑은 '+M.명부총원+'명 전체 이력입니다. '+
+      '퇴사자 명부와 휴직 날짜가 여기서 처음 확보돼, 9번·8번의 추정치를 실측으로 대체합니다.',['fact','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('명부 총원',cnt(M.명부총원)+'명','재직 '+M.group.reduce(function(a,g){return a+g.재직;},0)+
+          ' · 휴직 '+M.group.reduce(function(a,g){return a+g.휴직;},0)+
+          ' · 퇴직 '+M.group.reduce(function(a,g){return a+g.퇴직;},0),'lead')+
+      kpi('2026 이직률',pct(t26.연환산이직률),'1~9월 '+pct(t26.이직률)+' 연환산','bad')+
+      kpi('퇴사자 중위근속',LS.중위근속+'년','평균 '+LS.평균근속+'년')+
+      kpi('1년 내 퇴사',pct(LS['1년내비중']),LS['1년내']+'명 / '+LS.퇴사자+'명','bad')+
+      kpi('3개월 내 퇴사',pct(LS['3개월내비중']),LS['3개월내']+'명','bad')+
+      kpi('휴직자',M.leave.length+'명','날짜 전원 확보')+
+      '</div>';
+    h+=hmTabBar();
+
+    if(vhmTab==='이직'){
+      h+=panel('연도별 이직률 — 실측','퇴사 ÷ ((기초인원+기말인원)÷2). 코코도르+코코도르팜 명부 기준이며, 2026년은 9개월치라 연환산을 함께 적었습니다.',
+        table([
+          {label:'연도',render:function(r){return '<b>'+r.연도+'</b>'+(r.부분?' <span class="tag part">'+esc(r.기간)+'</span>':'');}},
+          {label:'기초',num:true,render:function(r){return cnt(r.기초)+'명';}},
+          {label:'기말',num:true,render:function(r){return cnt(r.기말)+'명';}},
+          {label:'평균인원',num:true,render:function(r){return r.평균인원+'명';}},
+          {label:'입사',num:true,render:function(r){return '<b class="pos">+'+r.입사+'</b>';}},
+          {label:'퇴사',num:true,render:function(r){return '<b class="neg">-'+r.퇴사+'</b>';}},
+          {label:'순증',num:true,cls:'strong',render:function(r){return sign(r.순증,cnt);}},
+          {label:'이직률',num:true,cls:'strong',render:function(r){
+            return '<b class="'+(r.이직률>=0.3?'neg':'')+'">'+pct(r.이직률)+'</b>';}},
+          {label:'연환산',num:true,render:function(r){return r.부분?'<b class="neg">'+pct(r.연환산이직률)+'</b>':'<span class="muted">-</span>';}},
+          {label:'',render:function(r){return bar(r.이직률,maxOf(T,function(x){return x.이직률||0;}));}}
+        ], T));
+      h+=panel('읽는 법','',
+        '<div class="cards">'+[
+          ['이직률은 내려오다 2026년에 다시 올랐다',
+           '2022년 '+pct(T[0].이직률)+' → 2025년 '+pct(t25.이직률)+'까지 내려왔지만, 2026년 1~9월에 이미 '+t26.퇴사+'명이 나가 '+
+           '연환산 '+pct(t26.연환산이직률)+'입니다. 작년보다 다시 나빠졌습니다.'],
+          ['절반 이상이 1년을 못 채운다',
+           '퇴사자 '+LS.퇴사자+'명 중 '+LS['1년내']+'명('+pct(LS['1년내비중'])+')이 1년 안에, '+LS['3개월내']+'명('+pct(LS['3개월내비중'])+')은 3개월 안에 나갔습니다. '+
+           '중위 근속은 '+LS.중위근속+'년 — 채용이 아니라 정착이 무너진 구조입니다.'],
+          ['왜 나갔는지는 아직 모른다',
+           '퇴직사유가 기재된 건이 '+LS.사유기재+'건뿐입니다. Exit Interview를 의무화하고 사유 코드를 인사시스템에 남기지 않으면 '+
+           '이 숫자를 줄일 방법을 찾을 수 없습니다.']
+        ].map(function(c){return '<div class="card" style="border-color:var(--crit)"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+      h+=panel('퇴사자 근속 분포 ('+LS.퇴사자+'명)','입사일부터 퇴직일까지입니다.',
+        table([
+          {label:'근속 구간',render:function(r){return '<b>'+esc(r.구간)+'</b>';}},
+          {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+          {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+          {label:'',render:function(r){return bar(r.인원,maxOf(M.leaverBands,function(x){return x.인원;}));}}
+        ], M.leaverBands));
+      h+=panel('최근 2년 부서별 퇴사','2025-01 이후 퇴직자를 퇴직 당시 소속으로 집계했습니다.',
+        table([
+          {label:'소속',render:function(r){return '<b>'+esc(r.소속)+'</b>';}},
+          {label:'퇴사',num:true,cls:'strong',render:function(r){return cnt(r.퇴사)+'명';}},
+          {label:'',render:function(r){return bar(r.퇴사,maxOf(M.leaverByDept,function(x){return x.퇴사;}));}}
+        ], M.leaverByDept, '340px'));
+      h+='<div class="searchbar"><input id="hmq" type="search" placeholder="퇴사자 이름·부서 검색" value=""></div><div id="hmlv"></div>';
+    }
+
+    if(vhmTab==='휴직'){
+      var und=M.leave.filter(function(r){return r.복직미정;}).length;
+      h+=panel('휴직자 '+M.leave.length+'명 — 날짜 전원 확보','8번 「근태·휴직 현황」에서 비어 있던 휴직 시작일·복직 예정일이 인사마스터에서 모두 나옵니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('휴직자',M.leave.length+'명','명부 기준','lead')+
+          kpi('복직일 미정',und+'명','종료일 2999-12-31로 입력됨',und?'bad':'')+
+          kpi('최장 경과',Math.max.apply(null,M.leave.map(function(r){return r.경과일||0;}))+'일',
+              '기준일 '+M.기준일)+
+          kpi('연내 복직 예정',M.leave.filter(function(r){return r.복직예정 && r.복직예정!=='미정' && r.복직예정<'2027-01-01';}).length+'명','2026년 안')+
+        '</div>'+
+        table([
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'법인',render:function(r){return esc(r.법인);}},
+          {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+          {label:'직위',render:function(r){return dash(r.직위);}},
+          {label:'휴직 시작',render:function(r){return esc(r.휴직시작);}},
+          {label:'복직 예정',cls:'strong',render:function(r){
+            return r.복직미정?'<span class="sev 치명">미정</span>':esc(r.복직예정);}},
+          {label:'예정 기간',num:true,render:function(r){return r['예정기간(개월)']?r['예정기간(개월)']+'개월':'<span class="muted">-</span>';}},
+          {label:'경과일',num:true,render:function(r){return cnt(r.경과일)+'일';}},
+          {label:'입사일',render:function(r){return dash(r.입사일);}},
+          {label:'근속',num:true,render:function(r){return r.근속년수?r.근속년수+'년':'<span class="muted">-</span>';}}
+        ], M.leave, null, function(r){return r.복직미정?'stripe-치명':'';}));
+      h+=note('※ 복직 예정일이 2999-12-31로 입력된 '+und+'명은 시스템상 「미정」입니다. 육아휴직 연장인지 무기한인지 인사파트 확인이 필요합니다.');
+    }
+
+    if(vhmTab==='구성'){
+      var F=C.외국인;
+      h+=panel('고용형태 · 성별','코코도르+코코도르팜 현원 '+C.현원+'명 (재직+휴직)',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('현원',C.현원+'명','인사마스터 '+M.기준일,'lead')+
+          kpi('정규직',(C.고용형태[0]||{}).인원+'명',pct((C.고용형태[0]||{}).비중))+
+          kpi('여성 비중',pct((C.성별.filter(function(x){return x.값==='여자';})[0]||{}).비중||0),
+              (C.성별.filter(function(x){return x.값==='여자';})[0]||{}).인원+'명')+
+          kpi('외국인',F.인원+'명',pct(F.비중)+' · 국적 실데이터')+
+          kpi('평균 연령',C.연령.평균+'세','중위 '+C.연령.중위+'세 · '+C.연령.확인+'/'+C.연령.전체+'명 확인')+
+        '</div>'+
+        '<div class="cards">'+
+        '<div class="card"><h3>고용형태</h3>'+mixTable(C.고용형태,'구분')+'</div>'+
+        '<div class="card"><h3>성별</h3>'+mixTable(C.성별,'구분')+'</div>'+
+        '</div>');
+      h+=panel('연령 분포','생년월일은 반출하지 않고 연령 구간으로만 환산했습니다.',
+        table([
+          {label:'구간',render:function(r){return '<b>'+esc(r.구간)+'</b>';}},
+          {label:'인원',num:true,cls:'strong',render:function(r){return cnt(r.인원)+'명';}},
+          {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+          {label:'',render:function(r){return bar(r.인원,maxOf(C.연령.구간,function(x){return x.인원;}));}}
+        ], C.연령.구간));
+      h+=panel('외국인 '+F.인원+'명 — 국적별','10번 「외국인 급여대장」은 성명 표기로 추정했지만, 여기는 인사마스터의 국적 항목 실데이터입니다.',
+        mixTable(F.국적,'국적'));
+      h+=panel('근무유형 · 학력','',
+        '<div class="cards">'+
+        '<div class="card"><h3>근무유형</h3>'+mixTable(C.근무유형,'유형')+'</div>'+
+        '<div class="card"><h3>학력</h3>'+mixTable(C.학력,'학력')+'</div>'+
+        '</div>',true);
+    }
+
+    if(vhmTab==='법인'){
+      h+=panel('그룹 '+M.group.length+'개 법인','이 대시보드의 다른 메뉴는 급여대장이 있는 코코도르·코코도르팜·대만법인 3개만 다룹니다. 인사마스터에는 '+M.group.length+'개 법인 이력이 있습니다.',
+        table([
+          {label:'법인',render:function(r){return '<b>'+esc(r.법인)+'</b>';}},
+          {label:'현원',num:true,cls:'strong',render:function(r){return cnt(r.현원)+'명';}},
+          {label:'재직',num:true,render:function(r){return cnt(r.재직)+'명';}},
+          {label:'휴직',num:true,render:function(r){return r.휴직?cnt(r.휴직)+'명':'<span class="muted">-</span>';}},
+          {label:'퇴직',num:true,render:function(r){return '<b class="neg">'+cnt(r.퇴직)+'명</b>';}},
+          {label:'명부 누계',num:true,render:function(r){return cnt(r.명부)+'명';}},
+          {label:'누적 이탈률',num:true,cls:'strong',render:function(r){
+            return '<b class="'+(r.누적이탈률>=0.8?'neg':'')+'">'+pct(r.누적이탈률)+'</b>';}},
+          {label:'',render:function(r){return bar(r.현원,maxOf(M.group,function(x){return x.현원;}));}}
+        ], M.group, null, null));
+      h+=note('※ 누적 이탈률 = 퇴직 ÷ 명부 누계. 이미 정리된 법인(제이스퍼퓸빌리지·코코도르맘 등)은 100%에 가깝게 나옵니다. '+
+        '급여 자료가 없는 법인은 이 대시보드의 인건비 집계에 들어가 있지 않습니다.');
+    }
+
+    if(vhmTab==='산재'){
+      var S=M.injurySummary;
+      h+=panel('산업재해 요양 '+S.건수+'건 ('+S.기간+')','근로복지공단 요양 승인 내역입니다. 주민등록번호는 반출하지 않았습니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('총 건수',S.건수+'건',esc(S.기간),'bad')+
+          kpi('총 요양일',cnt(S.총요양일)+'일','평균 '+S.평균요양일+'일')+
+          kpi('최장 요양',cnt(S.최장.요양일수)+'일',esc(S.최장.성명)+' · '+esc(S.최장.재해일자))+
+          kpi('전건 재해형태','사고','질병 0건')+
+          kpi('최다 관할',esc((S.지사별[0]||{}).지사),(S.지사별[0]||{}).건수+'건')+
+        '</div>'+
+        table([
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'재해일자',render:function(r){return esc(r.재해일자);}},
+          {label:'요양 시작',render:function(r){return esc(r.요양시작);}},
+          {label:'요양 종료',render:function(r){return esc(r.요양종료);}},
+          {label:'요양일수',num:true,cls:'strong',render:function(r){return cnt(r.요양일수)+'일';}},
+          {label:'재해형태',render:function(r){return '<span class="sev 주의">'+esc(r.재해형태)+'</span>';}},
+          {label:'의료기관',render:function(r){return esc(r.의료기관);}},
+          {label:'관할지사',render:function(r){return esc(r.관할지사);}},
+          {label:'',render:function(r){return bar(r.요양일수,maxOf(M.injury,function(x){return x.요양일수||0;}));}}
+        ], M.injury));
+      h+=panel('짚어둘 것','',
+        '<div class="cards">'+[
+          ['5년간 6건 · 전부 「사고」','질병 재해가 0건입니다. 생산·물류 현장의 근골격계 질환이 산재로 올라오지 않는 것인지, 실제로 없는 것인지 확인이 필요합니다.'],
+          ['용인지사 관할이 '+((S.지사별.filter(function(x){return x.지사==='용인지사';})[0]||{}).건수||0)+'건','용인·본사 사업장에 몰려 있습니다. 사업장별 안전점검 주기를 다시 볼 근거입니다.'],
+          ['요양 중 급여 처리','요양기간에는 휴업급여가 나가고 회사는 평균임금 일부를 부담합니다. 8번 휴직·2번 급여대장과 대사해 누락이 없는지 확인해야 합니다.']
+        ].map(function(c){return '<div class="card"><h3>'+c[0]+'</h3><p>'+c[1]+'</p></div>';}).join('')+'</div>',true);
+    }
+
+    if(vhmTab==='근태'){
+      var A=M.api;
+      h+=panel('5240 근태 API 연계 — 진행 중','인사파트가 '+esc(A.착수일)+' 착수해 '+esc(A.가이드수령)+' 가이드를 받았습니다. 이 연계가 끝나면 8번의 「월차·반차 원본 없음」이 해소됩니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('공급사',esc(A.공급사),esc(A.담당))+
+          kpi('착수 → 가이드',esc(A.착수일.slice(5))+' → '+esc(A.가이드수령.slice(5)),'5일 소요')+
+          kpi('응답 항목',A.응답항목.length+'개','직원번호~특이사항')+
+          kpi('인증키','미수령','가이드만 전달됨','bad')+
+          kpi('조회 단위','1일','1년치 = 365회 호출','bad')+
+        '</div>'+
+        '<div class="cards">'+
+        '<div class="card"><h3>연계 사양</h3><dl class="kv">'+
+          '<dt>방식</dt><dd>'+esc(A.방식)+'</dd>'+
+          '<dt>URL</dt><dd style="word-break:break-all;font-size:11.5px">'+esc(A.URL)+'</dd>'+
+          '<dt>interfaceId</dt><dd>'+esc(A.interfaceId)+'</dd>'+
+          '<dt>인증</dt><dd>'+esc(A.인증)+'</dd>'+
+          '<dt>조회 단위</dt><dd>'+esc(A.조회단위)+'</dd></dl></div>'+
+        '<div class="card"><h3>받게 되는 항목</h3><p>'+A.응답항목.map(esc).join(' · ')+'</p>'+
+          '<p style="margin-top:8px"><b>요청했으나 미확정</b><br>'+A.요청했으나_미확정.map(esc).join(' · ')+'</p></div>'+
+        '<div class="card" style="border-color:var(--warn)"><h3>공급사 답변</h3><p>'+esc(A.메일상_공급사답변)+'</p></div>'+
+        '</div>');
+      h+=panel('아직 막혀 있는 것','연계 완료 전에 인사파트가 정리해야 할 항목입니다.',
+        '<div class="cards">'+A.미해결.map(function(t){
+          return '<div class="card" style="border-color:var(--crit)"><p style="margin:0">'+esc(t)+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=panel('연결되면 바로 붙는 것','',
+        '<div class="cards">'+A.연결되면_가능해지는_것.map(function(t){
+          return '<div class="card" style="border-color:var(--good)"><p style="margin:0">'+esc(t)+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=note('※ 현재 4번 「연장시간·휴일일수」와 8번 「월차·반차」는 지급액 역산 또는 공란입니다. API가 붙으면 실측 근태로 교체할 수 있습니다.');
+    }
+
+    h+=note('※ 출처 — '+esc(M.출처)+'. '+esc(M.범위)+' '+M.한계.join(' '));
+    return h;
+  }
+  function renderHMLeavers(){
+    var el=document.getElementById('hmlv'); if(!el) return;
+    var q=((document.getElementById('hmq')||{}).value||'').trim().toLowerCase();
+    var rows=D.hrMaster.leavers.filter(function(r){
+      if(!q) return true;
+      return ((r.성명||'')+' '+(r.소속||'')).toLowerCase().indexOf(q)>=0;
+    }).slice().sort(function(a,b){ return (b.퇴직일||'')<(a.퇴직일||'')?-1:1; });
+    el.innerHTML=panel('퇴사자 명부 ('+rows.length+'명)','퇴직일 최근 순입니다. 코코도르+코코도르팜 기준.',
+      table([
+        {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+        {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+        {label:'직위',render:function(r){return dash(r.직위);}},
+        {label:'구분',render:function(r){return '<span class="tag '+(r.직원구분==='정규직'?'plan':'part')+'">'+esc(r.직원구분||'-')+'</span>';}},
+        {label:'입사일',render:function(r){return dash(r.입사일);}},
+        {label:'퇴직일',cls:'strong',render:function(r){return dash(r.퇴직일);}},
+        {label:'근속',num:true,cls:'strong',render:function(r){
+          if(r.근속년수===null) return '<span class="muted">-</span>';
+          return '<b class="'+(r.근속년수<1?'neg':'')+'">'+r.근속년수+'년</b>';}},
+        {label:'국적',render:function(r){return dash(r.국적);}},
+        {label:'퇴직사유',render:function(r){return r.퇴직사유?'<span class="sev 주의">'+esc(r.퇴직사유)+'</span>':'<span class="muted">미기재</span>';}}
+      ], rows, '520px', function(r){return (r.근속년수!==null&&r.근속년수<0.25)?'stripe-치명':'';}));
+  }
+
   /* ================= 10. 복리후생비 ================= */
   function v10(){
     var w=D.welfare;
@@ -2152,6 +2394,7 @@
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
+    {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
     {id:'v10',n:'11',t:'복리후생비 사용현황',        g:'비용', f:v10},
     {id:'v11',n:'12',t:'매출 대비 인건비 · 5년',     g:'비용', f:v11},
     {id:'v12',n:'13',t:'급여 · 수당 오류 검증',      g:'검증', f:v12},
@@ -2239,6 +2482,14 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vhm'){
+      document.querySelectorAll('[data-vhm]').forEach(function(b){
+        b.addEventListener('click',function(){ vhmTab=b.getAttribute('data-vhm'); go('vhm'); });
+      });
+      var hq=document.getElementById('hmq');
+      if(hq) hq.addEventListener('input',renderHMLeavers);
+      renderHMLeavers();
     }
     if(id==='vjc'){
       document.querySelectorAll('[data-vjc]').forEach(function(b){
