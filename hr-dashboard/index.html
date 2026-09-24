@@ -2099,6 +2099,28 @@
         ' → 가중 자동화율 <b>'+pct(Y.커버리지요약.자동화율)+'</b>. '+
         '「불가」 5건은 금액·외부인력·해외법인·업무일지로, API가 아니라 단가표 등록과 입력 폼으로 해결해야 합니다.</p>');
 
+      var SM=Y.보낸메일;
+      h+=panel('이미 나간 요청 — '+esc(SM.일시),esc(SM.수신)+' 앞 「'+esc(SM.제목)+'」',
+        table([
+          {label:'',render:function(r){return '<span class="rank">'+r.no+'</span>';}},
+          {label:'요청 항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'확인 내용',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.내용)+'</span>';}}
+        ], SM.요청항목)+
+        '<p style="margin-top:9px">'+esc(SM.성격)+'</p>');
+
+      h+=panel('아직 안 물어본 것 '+Y.추가확인.length+'건','이 중 '+
+        Y.추가확인.filter(function(x){return x.중요도==='치명';}).length+
+        '건은 답을 못 받으면 연결이 돼도 보고서가 안 만들어집니다.',
+        table([
+          {label:'',render:function(r){return '<span class="rank">'+r.no+'</span>';}},
+          {label:'확인 항목',render:function(r){return '<b style="white-space:normal;display:inline-block;min-width:18ch">'+esc(r.항목)+'</b>';}},
+          {label:'중요도',render:function(r){return '<span class="sev '+esc(r.중요도)+'">'+esc(r.중요도)+'</span>';}},
+          {label:'물어볼 곳',render:function(r){return esc(r.대상);}},
+          {label:'왜 필요한가',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:48ch">'+esc(r.왜)+'</span>';}},
+          {label:'못 받으면 막히는 것',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:24ch;color:var(--crit)">'+esc(r.막히는것)+'</span>';}}
+        ], Y.추가확인, 0, function(r){ return r.중요도==='치명'?'stripe-치명':'stripe-주의'; })+
+        '<p style="margin-top:9px">'+esc(Y.추가확인설명)+'</p>');
+
       h+=panel('연결 계획','',
         '<div class="steps">'+Y.계획.map(function(p){
           return '<div class="step"><div class="qn">'+String(p.단계).padStart(2,'0')+'</div><div>'+
