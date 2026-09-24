@@ -2082,6 +2082,11 @@
           '<dt>차단 지점</dt><dd>'+esc(NW.차단지점)+'</dd>'+
         '</dl>'+
         '<p style="margin-top:9px">'+esc(NW.의미)+'</p></div>'+
+        (NW.사내시험?'<div class="card" style="border-color:var(--warn);margin-top:11px">'+
+          '<div class="eyebrow">확정 아님 — 정황</div><h3>사내망에서는 닿았을 가능성</h3>'+
+          '<p>'+esc(NW.사내시험.정황)+'</p>'+
+          '<p><b>해석</b> — '+esc(NW.사내시험.해석)+'</p>'+
+          '<p style="color:var(--warn)"><b>확인 필요</b> — '+esc(NW.사내시험.확인필요)+'</p></div>':'')+
         '<div class="cards" style="margin-top:11px">'+NW.선택지.map(function(o){
           return '<div class="card"'+(o.권장?' style="border-color:var(--accent)"':'')+'>'+
             '<div class="eyebrow">'+(o.권장?'권장':'대안')+'</div><h3>'+esc(o.안)+'</h3>'+
