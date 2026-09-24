@@ -254,7 +254,7 @@
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
     var KR_ONLY={v1:1,vjc:1,vpay:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
-    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1,vrc:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
     if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
@@ -1641,6 +1641,147 @@
         {label:'국적',render:function(r){return dash(r.국적);}},
         {label:'퇴직사유',render:function(r){return r.퇴직사유?'<span class="sev 주의">'+esc(r.퇴직사유)+'</span>':'<span class="muted">미기재</span>';}}
       ], rows, '520px', function(r){return (r.근속년수!==null&&r.근속년수<0.25)?'stripe-치명':'';}));
+  }
+
+  /* ================= 5-2. 채용 · 면접 ================= */
+  var vrcTab='지원서', vrcQ='';
+  function vRc(){
+    var R=D.recruit, F=R.form;
+    var h=head('5-2. 채용 · 면접','구글 드라이브 인사 자료에서 찾은 것입니다. '+
+      '면접평가표 실제 양식, 2025 상반기 채용 JD '+R.jdMeta.포지션수+'개 포지션, 이력서·지원서 '+R.지원서수+'건.',['fact','실측']);
+    h+='<div class="kpi-row">'+
+      kpi('지원서 파일',R.지원서수+'건','드라이브에 남은 것만','lead')+
+      kpi('입사로 이어짐',R.입사확인+'명','명부에서 이름 확인')+
+      kpi('면접평가표',F.항목수+'개 항목','S~D 5단계 · 만점 '+F.만점+'점')+
+      kpi('작성된 평가표','1건','2024-10-10 · 나머지 없음','bad')+
+      kpi('채용 JD',R.jdMeta.포지션수+'개','2025 상반기 공고')+
+      kpi('수습',' 3개월','첫 1개월 급여의 85%','warn')+
+      '</div>';
+    var T=[['지원서','① 지원서·이력서'],['평가표','② 면접평가표 양식'],['JD','③ 채용 JD'],['갭','④ 남은 공백']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vrcTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vrc="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vrcTab==='지원서'){
+      h+=panel('연도별 · 직무별','',
+        '<div class="cards">'+
+        '<div class="card"><h3>연도별 접수</h3>'+
+          table([{label:'연도',render:function(r){return '<b>'+esc(r.연도)+'</b>';}},
+                 {label:'건수',num:true,cls:'strong',render:function(r){return r.건수+'건';}},
+                 {label:'',render:function(r){return bar(r.건수,maxOf(R.연도별,function(x){return x.건수;}));}}], R.연도별)+
+          '<p style="margin-top:7px;font-size:11.5px">파일이 남아 있는 것만 세었습니다. 실제 지원자는 훨씬 많습니다.</p></div>'+
+        '<div class="card"><h3>직무별 접수 (상위)</h3>'+
+          table([{label:'직무',render:function(r){return esc(r.직무);}},
+                 {label:'건수',num:true,cls:'strong',render:function(r){return r.건수+'건';}}], R.직무별.slice(0,10))+'</div>'+
+        '</div>',true);
+      h+='<div class="searchbar"><input id="rcq" type="search" placeholder="지원자·직무 검색" value="'+esc(vrcQ)+'"></div><div id="rctbl"></div>';
+      h+=note('※ '+esc(R.한계[0])+' '+esc(R.한계[3]));
+    }
+
+    if(vrcTab==='평가표'){
+      h+=panel('면접평가표 — 회사가 실제로 쓰는 양식','제가 만든 틀이 아니라 드라이브에 있던 실제 양식입니다. 5-1 ⑤ 탭의 시트 틀도 이 항목에 맞춰야 합니다.',
+        '<div class="kpi-row" style="margin-bottom:10px">'+
+          kpi('평가 항목',F.항목수+'개','인성/자질 5 · 업무 역량 5','lead')+
+          kpi('척도','S A B C D','10 / 8 / 6 / 4 / 2점')+
+          kpi('만점',F.만점+'점','항목당 10점')+
+          kpi('결과 선택',F.결과선택지.length+'단계','채용 여부 + 타 부서 배치')+
+        '</div>'+
+        table([
+          {label:'구분',render:function(r){return '<span class="sev '+(r.구분==='인성/자질'?'주의':'참고')+'">'+esc(r.구분)+'</span>';}},
+          {label:'평가항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'평가 착안점',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:52ch">'+esc(r.착안점)+'</span>';}}
+        ], F.항목));
+      h+=panel('척도와 결과','',
+        '<div class="cards">'+
+        '<div class="card"><h3>평가 척도</h3>'+
+          table([{label:'등급',render:function(r){return '<b>'+esc(r.등급)+'</b>';}},
+                 {label:'점수',num:true,cls:'strong',render:function(r){return r.점수+'점';}}], F.척도)+
+          '<p style="margin-top:7px;font-size:11.5px">6-1 다면평가는 5점 척도로 설계했습니다. '+
+          '두 제도를 교차하려면 <b>한쪽을 상대 척도로 환산</b>해야 합니다 (S=5, A=4, B=3, C=2, D=1).</p></div>'+
+        '<div class="card"><h3>종합의견 칸</h3><p>'+F.종합의견칸.map(esc).join('<br>')+'</p>'+
+          '<h3 style="margin-top:10px">결과 선택지</h3><p>'+F.결과선택지.map(function(x,i){
+            return (i+1)+'. '+esc(x);}).join('<br>')+'</p></div>'+
+        '</div>',true);
+      h+=panel('작성 사례 — 유일하게 남은 1건','이 1건 말고는 작성된 평가표가 없습니다.',
+        '<div class="card" style="border-color:var(--accent)">'+
+        '<dl class="kv">'+
+          '<dt>면접일</dt><dd>'+esc(F.사례.면접일)+'</dd>'+
+          '<dt>지원분야</dt><dd>'+esc(F.사례.지원분야)+'</dd>'+
+          '<dt>지원자</dt><dd>'+esc(F.사례.지원자)+'</dd>'+
+          '<dt>면접관</dt><dd>'+esc(F.사례.면접관)+'</dd>'+
+          '<dt>결과</dt><dd><span class="sev 참고">'+esc(F.사례.결과)+'</span></dd>'+
+        '</dl>'+
+        '<p style="margin-top:10px"><b>인성/자질</b> — '+esc(F.사례.인성의견)+'</p>'+
+        '<p><b>업무 역량</b> — '+esc(F.사례.역량의견)+'</p></div>',true);
+    }
+
+    if(vrcTab==='JD'){
+      h+=panel('2025년 상반기 채용 JD — '+R.jdMeta.포지션수+'개 포지션',esc(R.jdMeta.기준)+' · '+esc(R.jdMeta.고용형태),
+        table([
+          {label:'법인',render:function(r){return '<span class="tag '+(r.법인==='코코도르'?'plan':'part')+'">'+esc(r.법인)+'</span>';}},
+          {label:'부문',render:function(r){return '<b>'+esc(r.부문)+'</b>';}},
+          {label:'포지션',cls:'strong',render:function(r){return esc(r.포지션);}},
+          {label:'담당업무',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:40ch">'+esc(r.담당업무)+'</span>';}},
+          {label:'자격요건',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:32ch">'+esc(r.자격요건)+'</span>';}},
+          {label:'우대사항',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:32ch">'+esc(r.우대사항)+'</span>';}}
+        ], R.jd, '520px'));
+      h+=panel('근무지 · 고용형태','',
+        '<div class="cards">'+
+        '<div class="card"><h3>근무지</h3><p>'+R.jdMeta.근무지.map(esc).join('<br>')+'</p></div>'+
+        '<div class="card" style="border-color:var(--warn)"><h3>수습 조건</h3><p>'+esc(R.jdMeta.고용형태)+'</p>'+
+        '<p style="margin-top:8px">9-1에서 <b>3개월 내 퇴사가 26.8%</b>로 나왔습니다. '+
+        '수습 3개월과 이탈 구간이 정확히 겹칩니다. 수습 첫 달 85% 지급 조건이 조기 이탈에 영향을 주는지 볼 필요가 있습니다.</p></div>'+
+        '</div>',true);
+    }
+
+    if(vrcTab==='갭'){
+      h+=panel('드라이브에서 채워진 것 / 여전히 빈 것','',
+        '<div class="cards">'+[
+          ['채워짐 · 면접평가표 양식','제가 만든 가상 틀 대신 회사가 쓰는 실제 양식(10개 항목·S~D 척도)을 넣었습니다.','good'],
+          ['채워짐 · 채용 JD '+R.jdMeta.포지션수+'개','직무별 담당업무·자격요건·우대사항이 들어왔습니다. 경력 요구연수가 있어 경력 데이터를 받으면 바로 대조할 수 있습니다.','good'],
+          ['채워짐 · 지원서 '+R.지원서수+'건','지원자·직무·접수일 인덱스입니다. 본문은 추출하지 않았습니다.','good'],
+          ['여전히 빔 · 면접 기록','작성된 평가표가 1건뿐입니다. 나머지 면접의 점수·의견·합불이 없어 채용 품질을 잴 수 없습니다.','bad'],
+          ['여전히 빔 · 경력사항','이력서 파일은 있지만 본문을 DB로 옮긴 것이 없습니다. 이전 회사·기간·직무가 구조화돼 있지 않습니다.','bad'],
+          ['여전히 빔 · 적성검사','드라이브에도 없습니다. 실시 여부부터 확인이 필요합니다.','bad']
+        ].map(function(c){
+          return '<div class="card" style="border-color:var('+(c[2]==='good'?'--good':'--crit')+')">'+
+            '<h3>'+esc(c[0])+'</h3><p>'+c[1]+'</p></div>';
+        }).join('')+'</div>',true);
+      h+=panel('다음에 할 일','',
+        '<div class="steps">'+[
+          ['면접평가표를 모은다','작성된 평가표가 1건뿐입니다. 2024년 이후 진행한 면접의 평가표를 스캔이든 파일이든 모아 주시면 '+
+           '지원자 '+R.지원서수+'건과 붙여 채용 품질을 처음으로 잴 수 있습니다.'],
+          ['이력서 본문을 구조화한다','파일은 '+R.지원서수+'건 있지만 DB가 아니라 파일 더미입니다. '+
+           '5-1 ⑤ 탭의 경력 시트 틀(10칸)로 옮기면 경력직 채용 적정성 검증이 가능해집니다.'],
+          ['척도를 맞춘다','면접은 S~D 5단계(10~2점), 6-1 다면평가는 5점 척도로 설계했습니다. '+
+           '둘 중 하나로 통일하거나 환산표를 확정해야 「채용 때 본 것」과 「일하며 드러난 것」을 비교할 수 있습니다.'],
+          ['수습 조건을 점검한다','수습 3개월·첫 달 85% 지급이 3개월 내 퇴사 26.8%와 겹칩니다. '+
+           '수습 중 퇴사자와 수습 통과자의 면접 점수를 비교하면 원인이 채용인지 수습 운영인지 갈립니다.']
+        ].map(function(x,i){
+          return '<div class="step"><div class="qn">'+String(i+1).padStart(2,'0')+'</div><div>'+
+            '<h3>'+esc(x[0])+'</h3><p>'+x[1]+'</p></div></div>';
+        }).join('')+'</div>',true);
+    }
+    h+=note('※ 출처 — '+esc(R.출처)+'. '+R.한계.join(' '));
+    return h;
+  }
+  function renderRc(){
+    var el=document.getElementById('rctbl'); if(!el) return;
+    var q=vrcQ.trim().toLowerCase();
+    var rows=D.recruit.index.filter(function(r){
+      if(!q) return true;
+      return ((r.지원자||'')+' '+(r.지원직무||'')).toLowerCase().indexOf(q)>=0;
+    });
+    el.innerHTML=panel('지원서 · 이력서 ('+rows.length+'건)','접수일 최근 순입니다. 파일 본문은 읽지 않았습니다.',
+      table([
+        {label:'접수일',cls:'strong',render:function(r){return esc(r.접수일);}},
+        {label:'지원자',render:function(r){return '<b>'+esc(r.지원자||'-')+'</b>';}},
+        {label:'지원 직무',render:function(r){return esc(r.지원직무);}},
+        {label:'법인',render:function(r){return '<span class="tag '+(r.법인==='코코도르'?'plan':'part')+'">'+esc(r.법인)+'</span>';}},
+        {label:'입사',render:function(r){return r.입사?'<span class="sev 참고">입사</span>':'<span class="muted">미확인</span>';}},
+        {label:'형식',render:function(r){return '<span class="num">'+esc(r.형식)+'</span>';}},
+        {label:'파일',render:function(r){return '<span style="white-space:normal;color:var(--ink-3);font-size:11.5px">'+esc(r.파일)+'</span>';}}
+      ], rows, '520px', function(r){return r.입사?'stripe-참고':'';}));
   }
 
   /* ================= 5-1. 입사원서 조회 ================= */
@@ -3231,6 +3372,7 @@
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
     {id:'v5', n:'5', t:'개인별 급여 히스토리',       g:'직원', f:v5},
     {id:'vap',n:'5-1',t:'입사원서 · 이력 조회',      g:'직원', f:vAp},
+    {id:'vrc',n:'5-2',t:'채용 · 면접',               g:'직원', f:vRc},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
     {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
@@ -3332,6 +3474,14 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vrc'){
+      document.querySelectorAll('[data-vrc]').forEach(function(b){
+        b.addEventListener('click',function(){ vrcTab=b.getAttribute('data-vrc'); go('vrc'); });
+      });
+      var rq=document.getElementById('rcq');
+      if(rq) rq.addEventListener('input',function(){ vrcQ=rq.value; renderRc(); });
+      renderRc();
     }
     if(id==='vap'){
       document.querySelectorAll('[data-vap]').forEach(function(b){
