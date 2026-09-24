@@ -82,6 +82,8 @@
   .kpi .foot{font-size:10.5px;color:var(--ink-2);margin-top:3px;}
   .kpi.lead{border-color:var(--accent);}
   .kpi.bad{border-color:var(--crit);} .kpi.bad .value{color:var(--crit);}
+  .kpi.warn{border-color:var(--warn);} .kpi.warn .value{color:var(--warn);}
+  .kpi.good{border-color:var(--good,var(--accent));}
 
   .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);
          padding:13px 15px 6px;margin-bottom:14px;}
@@ -254,7 +256,7 @@
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
     var KR_ONLY={v1:1,vjc:1,vpay:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
-    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1,vrc:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1,vrc:1,vdl:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
     if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
@@ -1786,6 +1788,371 @@
 
   /* ================= 5-1. 입사원서 조회 ================= */
   var vapTab='조회', vapSel=null, vapQ='';
+  /* ── 8-3 일일 인사 보고 자동화 ─────────────────────────────── */
+  var vdlTab='오늘';
+  function dlSev(ok){ return ok?'참고':'치명'; }
+  function vDaily(){
+    var Y=D.daily, S=Y.기간합계, W=Y.주말, A=Y.근태, LR=Y.휴직대사, AP=Y.api;
+    var h=head('8-3. 일일 인사 보고 · 5240 연동',
+      Y.작성자+'님 일일업무보고('+Y.기준일+')를 구조화하고, 각 항목을 5240 근태 API로 자동 생성할 수 있는지 판정했습니다. '+
+      'interfaceKey 생성 로직은 명세 예시값으로 검증을 마쳤습니다.',['fact','실측 + 설계']);
+    h+=scopeBanner('vdl');
+    h+='<div class="kpi-row">'+
+      kpi('9/1~9/23 인건비',man(S.총합),'연장+출장+외주 '+S.일수+'일','lead')+
+      kpi('주말 연장근무 비중',pct(W.주말비중),'토+일 '+W.주말일수+'일 / 평일 '+W.평일일수+'일','bad')+
+      kpi('토요일 / 평일 배수',W.토요일배수+'배','1일 평균 기준','bad')+
+      kpi('근태 인원 검산',A.검산.일치?'일치':'불일치',
+          '코코도르 '+A.검산.코코도르_합+'/'+A.검산.코코도르_정원+' · 코팜 '+A.검산.코팜_합+'/'+A.검산.코팜_정원,
+          A.검산.일치?'':'bad')+
+      kpi('휴직 날짜 불일치',LR.불일치+'/'+LR.대상+'명','5240 vs 근태보고','bad')+
+      kpi('자동화 가능 범위',pct(Y.커버리지요약.자동화율),
+          '가능 '+Y.커버리지요약.가능+' · 조건부 '+Y.커버리지요약.조건부+' · 불가 '+Y.커버리지요약.불가)+
+      '</div>';
+
+    var T=[['오늘','① 오늘 보고'],['인건비','② 일별 인건비'],['상세','③ 외주·야근·출장'],
+           ['휴직','④ 휴직 날짜 대사'],['api','⑤ 5240 연동'],['발견','⑥ 발견과 업무일지']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vdlTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vdl="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    /* ① 오늘 보고 ------------------------------------------------ */
+    if(vdlTab==='오늘'){
+      h+=panel('금일 인건비 — 보고서 상단 카드','카드와 아래 일별 표의 기준이 달라 같은 금액이 두 번 나타납니다.',
+        '<div class="cards">'+
+        '<div class="card"><h3>카드 기준 (보고서 원문)</h3>'+
+          '<dl class="kv">'+
+            '<dt>출장비</dt><dd class="metric">'+won(Y.카드.출장비)+'</dd>'+
+            '<dt>외주인력비</dt><dd class="metric">'+won(Y.카드.외주인력비)+'</dd>'+
+            '<dt>연장근무비</dt><dd class="metric">'+won(Y.카드.연장근무비)+
+              ' <span class="muted">('+esc(Y.카드.연장근무비_귀속일)+' 발생분)</span></dd>'+
+            '<dt><b>총합</b></dt><dd class="metric"><b>'+won(Y.카드.총합)+'</b></dd>'+
+          '</dl></div>'+
+        '<div class="card" style="border-color:var(--crit)"><h3>일별 표 기준 (같은 9/23 행)</h3>'+
+          '<dl class="kv">'+
+            '<dt>총합</dt><dd class="metric">'+won(Y.기준충돌.표총합)+'</dd>'+
+            '<dt>카드와 차이</dt><dd class="metric" style="color:var(--crit)">'+won(Y.기준충돌.차이)+'</dd>'+
+          '</dl>'+
+          '<p style="margin-top:8px">'+esc(Y.기준충돌.원인)+'</p>'+
+          '<p><b>조치</b> — '+esc(Y.기준충돌.조치)+'</p></div>'+
+        '</div>',true);
+
+      h+=panel('국내 근태 ('+Y.기준일+')','정원 '+A.정원.합계+'명 = 코코도르 '+A.정원.코코도르+' + 코코도르팜 '+A.정원.코코도르팜+'. '+
+        '유형별 인원 합계가 정원과 '+(A.검산.일치?'정확히 일치합니다':'맞지 않습니다')+'.',
+        table([
+          {label:'근태유형',render:function(r){return '<b>'+esc(r.유형)+'</b>';}},
+          {label:'코코도르',num:true,cls:'strong',render:function(r){return r.코코도르?cnt(r.코코도르)+'명':'<span class="muted">-</span>';}},
+          {label:'코팜',num:true,render:function(r){return r.코팜?cnt(r.코팜)+'명':'<span class="muted">-</span>';}},
+          {label:'',render:function(r){return bar(r.코코도르+r.코팜,maxOf(A.rows,function(x){return x.코코도르+x.코팜;}));}},
+          {label:'명단 · 비고',render:function(r){
+            var raw=(r.유형==='연차(8H미만)')?[]:(r.코코도르명단||[]);
+            var nm=noP(raw.map(function(n){return {성명:n};})).map(function(x){return x.성명;});
+            var fm=noP((r.코팜명단||[]).map(function(n){return {성명:n};})).map(function(x){return x.성명;});
+            var parts=[];
+            if(nm.length) parts.push(nm.join(', '));
+            if(fm.length) parts.push('<span class="muted">코팜</span> '+fm.join(', '));
+            if(r.비고) parts.push('<span class="muted">'+esc(r.비고)+'</span>');
+            return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+(parts.join(' · ')||'<span class="muted">-</span>')+'</span>';}}
+        ], A.rows));
+
+      h+=panel('연차 사용 시간 — 부분연차 구간','8시간 미만 연차 '+A.연차시간.합계+'시간 중 부분연차가 '+A.연차시간['8H미만']+'시간입니다.',
+        '<div class="cards">'+
+        '<div class="card"><h3>구간별</h3>'+
+          table([{label:'구간',render:function(r){return '<b>'+esc(r.구간)+'</b>';}},
+                 {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+                 {label:'시간계',num:true,cls:'strong',render:function(r){return r.시간계+'h';}},
+                 {label:'명단',render:function(r){return noP(r.명단.map(function(n){return {성명:n};})).map(function(x){return esc(x.성명);}).join(', ');}}],
+                A.부분연차)+
+          '<p style="margin-top:7px;font-size:11.5px">연차 8H '+A.연차시간['8H']+'h + 8H미만 '+A.연차시간['8H미만']+
+          'h = <b>'+A.연차시간.합계+'h</b> (=' +(A.연차시간.합계/8).toFixed(2)+'일)</p></div>'+
+        '<div class="card" style="border-color:var(--warn)"><h3>익일 ('+esc(A.익일.일자)+') 휴무 예정 '+A.익일.인원+'명</h3>'+
+          '<p><b>연차 8H</b> — '+noP(A.익일.연차8H.map(function(n){return {성명:n};})).map(function(x){return esc(x.성명);}).join(', ')+'</p>'+
+          '<p><b>연차 8H미만</b> — '+A.익일.연차8H미만.map(function(x){return esc(x.성명)+' '+x.시간+'h';}).join(', ')+'</p>'+
+          '<p style="color:var(--warn)"><b>확인 필요</b> — '+esc(A.익일.경고)+'</p></div>'+
+        '</div>',true);
+
+      h+=panel('국외 근태 ('+Y.기준일+')','정원 '+Y.해외근태.정원+'명 중 근태 기재는 '+Y.해외근태.보고인원+'명뿐입니다.',
+        '<div class="cards">'+
+        '<div class="card"><h3>유형별</h3>'+
+          table([{label:'근태유형',render:function(r){return esc(r.유형);}},
+                 {label:'인원',num:true,cls:'strong',render:function(r){return r.인원?r.인원+'명':'<span class="muted">-</span>';}},
+                 {label:'명단',render:function(r){return r.명단.length?r.명단.map(esc).join(', '):'<span class="muted">-</span>';}}],
+                Y.해외근태.rows)+'</div>'+
+        '<div class="card"><h3>중국 5명 상세</h3>'+
+          table([{label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+                 {label:'출근',render:function(r){return dash(r.출근);}},
+                 {label:'상태',render:function(r){return '<span class="sev '+(r.상태==='출근'?'참고':'주의')+'">'+esc(r.상태)+'</span>';}}],
+                Y.해외근태.중국상세)+'</div>'+
+        '</div>'+
+        '<div class="card" style="border-color:var(--crit);margin-top:11px"><h3>미보고 '+Y.해외근태.미보고+'명</h3>'+
+        '<p>'+esc(Y.해외근태.경고)+'</p>'+
+        '<p><span class="muted">제외 법인</span> '+Y.해외근태.제외.map(esc).join(' · ')+'</p>'+
+        '<p><span class="muted">미국</span> '+esc(Y.해외근태.미국메모)+'</p></div>',true);
+    }
+
+    /* ② 일별 인건비 --------------------------------------------- */
+    if(vdlTab==='인건비'){
+      var mx=maxOf(Y.일별,function(r){return r.총합;});
+      h+=panel('연장근무비가 주말에 쏠려 있습니다','연장근무비 '+man(S.연장근무비)+' 중 주말분이 '+man(W.주말금액)+'('+pct(W.주말비중)+')입니다.',
+        table([
+          {label:'구분',render:function(r){return '<b>'+esc(r.구분)+'</b>';}},
+          {label:'일수',num:true,render:function(r){return r.일수+'일';}},
+          {label:'금액',num:true,cls:'strong',render:function(r){return won(r.금액);}},
+          {label:'비중',num:true,render:function(r){return pct(r.비중);}},
+          {label:'1일 평균',num:true,render:function(r){return won(r.일평균);}},
+          {label:'',render:function(r){return bar(r.일평균,maxOf(W.구성,function(x){return x.일평균;}));}}
+        ], W.구성, 0, function(r){ return r.구분==='토요일'?'stripe-치명':(r.구분==='일요일'?'stripe-주의':''); })+
+        '<p style="margin-top:9px">토요일 1일 평균이 평일의 <b>'+W.토요일배수+'배</b>입니다. '+
+        '이 속도가 1년 이어지면 주말 특근비만 <b>'+man(W.연환산_주말)+'</b>입니다.</p>');
+
+      h+=panel('일별 인건비 '+S.일수+'일 ('+esc(S.기간)+')','토·일 행에 표시를 넣었습니다.',
+        table([
+          {label:'일자',render:function(r){return '<b>'+esc(r.일자)+'</b>';}},
+          {label:'요일',render:function(r){return r.주말?'<span class="sev '+(r.요일==='토'?'치명':'주의')+'">'+esc(r.요일)+'</span>':esc(r.요일);}},
+          {label:'연장근무비',num:true,render:function(r){return won(r.연장근무비);}},
+          {label:'출장비',num:true,render:function(r){return won(r.출장비);}},
+          {label:'외주용역비',num:true,render:function(r){return won(r.외주용역비);}},
+          {label:'총합',num:true,cls:'strong',render:function(r){return won(r.총합);}},
+          {label:'',render:function(r){return bar(r.총합,mx);}}
+        ], Y.일별, 460, function(r){ return r.요일==='토'?'stripe-치명':(r.요일==='일'?'stripe-주의':''); })+
+        '<dl class="kv" style="margin-top:10px">'+
+          '<dt>연장근무비</dt><dd class="metric">'+won(S.연장근무비)+'</dd>'+
+          '<dt>출장비</dt><dd class="metric">'+won(S.출장비)+'</dd>'+
+          '<dt>외주용역비</dt><dd class="metric">'+won(S.외주용역비)+'</dd>'+
+          '<dt><b>소계</b></dt><dd class="metric"><b>'+won(S.총합)+'</b></dd>'+
+        '</dl>');
+
+      h+=panel('회계 계정과 맞춰봤습니다','일일보고 '+S.일수+'일분을 30일로 환산해 손익·급여대장 월평균과 비교했습니다.',
+        table([
+          {label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'일일보고 '+S.일수+'일',num:true,render:function(r){return won(r['일일보고_23일']);}},
+          {label:'30일 환산',num:true,cls:'strong',render:function(r){return won(r.월환산);}},
+          {label:'회계 월평균',num:true,render:function(r){return won(r.회계_월평균);}},
+          {label:'충족률',num:true,render:function(r){return '<span class="sev '+(r.충족률>=0.8&&r.충족률<=1.2?'참고':'주의')+'">'+pct(r.충족률)+'</span>';}},
+          {label:'회계 출처',render:function(r){return '<span class="muted" style="white-space:normal;display:inline-block;min-width:30ch">'+esc(r.회계출처)+'</span>';}}
+        ], Y.대사)+
+        '<p style="margin-top:9px">'+esc(Y.대사설명)+'</p>');
+    }
+
+    /* ③ 외주·야근·출장 ------------------------------------------ */
+    if(vdlTab==='상세'){
+      ['금일','익일'].forEach(function(k){
+        var O=Y.외주[k];
+        h+=panel('외주 인력 — '+k+' ('+esc(O.일자)+' '+esc(O.요일)+')','',
+          table([
+            {label:'파트',render:function(r){return '<b>'+esc(r.파트)+'</b>';}},
+            {label:'인력사무소',render:function(r){return esc(r.인력사무소);}},
+            {label:'여',num:true,render:function(r){return r.여||'<span class="muted">-</span>';}},
+            {label:'남',num:true,render:function(r){return r.남||'<span class="muted">-</span>';}},
+            {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+            {label:'단가(여)',num:true,render:function(r){return won(r.단가_여);}},
+            {label:'단가(남)',num:true,render:function(r){return r.단가_남?won(r.단가_남):'<span class="muted">-</span>';}},
+            {label:'인건비',num:true,cls:'strong',render:function(r){return won(r.인건비);}}
+          ], O.rows)+
+          '<p style="margin-top:8px"><b>총합 '+won(O.총합)+'</b></p>',true);
+      });
+      h+=panel('외주 단가표','인원만 입력하면 금액이 자동 계산되는 구조입니다. 단가를 대시보드에 등록하면 외주 금액은 수기 입력이 필요 없습니다.',
+        table([
+          {label:'인력사무소',render:function(r){return '<b>'+esc(r.인력사무소);}},
+          {label:'여',num:true,render:function(r){return won(r.여);}},
+          {label:'남',num:true,render:function(r){return r.남?won(r.남):'<span class="muted">-</span>';}},
+          {label:'남녀 단가차',num:true,render:function(r){return r.남녀차?won(r.남녀차):'<span class="muted">-</span>';}},
+          {label:'차율',num:true,render:function(r){return r.남녀차율?pct(r.남녀차율):'<span class="muted">-</span>';}}
+        ], Y.외주.단가표)+
+        '<p style="margin-top:8px">'+esc(Y.외주.주의)+'</p>');
+
+      var OT=Y.야근;
+      h+=panel('전일 야근 ('+esc(OT.일자)+' '+esc(OT.요일)+')','총 '+won(OT.총합)+'.',
+        table([
+          {label:'구분',render:function(r){return '<span class="sev '+(r.구분==='사무직'?'참고':'주의')+'">'+esc(r.구분)+'</span>';}},
+          {label:'사업장',render:function(r){return dash(r.사업장==='-'?'':r.사업장);}},
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'소속',render:function(r){return esc(r.소속);}},
+          {label:'시작',render:function(r){return esc(r.시작);}},
+          {label:'종료',render:function(r){return esc(r.종료);}},
+          {label:'시간',num:true,render:function(r){return r.시간+'h';}},
+          {label:'수당종류',render:function(r){return esc(r.수당종류);}},
+          {label:'금액',num:true,cls:'strong',render:function(r){return won(r.금액);}},
+          {label:'시간당',num:true,render:function(r){return won(Math.round(r.금액/r.시간));}}
+        ], noP(OT.rows))+
+        '<p style="margin-top:9px;color:var(--warn)"><b>발견</b> — '+esc(OT.발견)+'</p>');
+
+      var TR=Y.출장;
+      h+=panel('금일 출장 ('+esc(TR.일자)+' '+esc(TR.요일)+')','실인원 '+TR.실인원+'명 · '+TR.rows.length+'건 · 총 '+won(TR.총합)+'.',
+        table([
+          {label:'구분',render:function(r){return '<span class="sev '+(r.구분==='사무직'?'참고':'주의')+'">'+esc(r.구분)+'</span>';}},
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'소속',render:function(r){return esc(r.소속);}},
+          {label:'시작',render:function(r){return r.시작==='00:00'?'<span class="muted">00:00</span>':esc(r.시작);}},
+          {label:'종료',render:function(r){return r.종료==='00:00'?'<span class="muted">00:00</span>':esc(r.종료);}},
+          {label:'출장지',render:function(r){return esc(r.출장지);}},
+          {label:'출장비',num:true,cls:'strong',render:function(r){return r.출장비?won(r.출장비):'<span class="sev 주의">0원</span>';}},
+          {label:'업무내용',render:function(r){return r.업무?'<span style="white-space:normal;display:inline-block;min-width:24ch">'+esc(r.업무)+'</span>':'<span class="muted">-</span>';}}
+        ], noP(TR.rows))+
+        '<div style="margin-top:9px">'+TR.이슈.map(function(x){
+          return '<p style="color:var(--warn)">· '+esc(x)+'</p>';}).join('')+'</div>');
+    }
+
+    /* ④ 휴직 날짜 대사 ------------------------------------------ */
+    if(vdlTab==='휴직'){
+      h+=panel('5240 인사시스템 vs 근태보고서 — 휴직 '+LR.대상+'명 날짜 대사',
+        '인원수는 양쪽이 '+LR.대상+'명으로 일치합니다. 날짜가 다른 사람이 '+LR.불일치+'명입니다.',
+        table([
+          {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'사유',render:function(r){return esc(r.사유);}},
+          {label:'5240 개시',render:function(r){return dash(r.시스템시작);}},
+          {label:'보고 개시',render:function(r){return r.보고시작?('<span'+( r.차이.indexOf('개시일')>=0?' style="color:var(--crit);font-weight:600"':'')+'>'+esc(r.보고시작)+'</span>'):'<span class="muted">-</span>';}},
+          {label:'5240 복직',render:function(r){return r.시스템복직미정?'<span class="sev 치명">미정</span>':dash(r.시스템복직);}},
+          {label:'보고 복직',render:function(r){return r.보고복직?('<span'+( r.차이.indexOf('복직일')>=0?' style="color:var(--crit);font-weight:600"':'')+'>'+esc(r.보고복직)+'</span>'):'<span class="muted">-</span>';}},
+          {label:'판정',render:function(r){return '<span class="sev '+(r.상태==='일치'?'참고':'치명')+'">'+esc(r.상태)+'</span>';}},
+          {label:'다른 항목',render:function(r){return r.차이.length?r.차이.join(' · '):'<span class="muted">-</span>';}}
+        ], LR.rows, 0, function(r){ return r.상태==='일치'?'':'stripe-치명'; }));
+
+      h+=panel('가장 문제가 되는 것 — 5240에 「미정」인데 보고서에는 복직일이 있는 '+LR.미정해소.length+'명','',
+        '<div class="cards">'+LR.미정해소.map(function(m){
+          return '<div class="card" style="border-color:var(--crit)"><h3>'+esc(m.성명)+'</h3>'+
+            '<dl class="kv">'+
+              '<dt>5240 복직예정</dt><dd><span class="sev 치명">미정</span></dd>'+
+              '<dt>보고서 복직예정</dt><dd class="metric">'+esc(m.보고복직)+'</dd>'+
+              '<dt>휴직 개시</dt><dd>'+esc(m.시스템시작)+(m.보고시작&&m.보고시작!==m.시스템시작?' <span style="color:var(--crit)">/ 보고 '+esc(m.보고시작)+'</span>':'')+'</dd>'+
+              (m.부서?'<dt>부서</dt><dd>'+esc(m.부서)+'</dd>':'')+
+            '</dl></div>';
+        }).join('')+'</div>'+
+        '<p style="margin-top:11px">'+esc(LR.판정)+'</p>',true);
+
+      h+=panel('차이 유형별','',
+        '<div class="cards">'+
+        '<div class="card"><h3>개시일이 다른 '+LR.개시일차.length+'명</h3>'+
+          table([{label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+                 {label:'5240',render:function(r){return esc(r.시스템시작);}},
+                 {label:'보고서',render:function(r){return '<span style="color:var(--crit)">'+esc(r.보고시작)+'</span>';}},
+                 {label:'차이(일)',num:true,render:function(r){
+                    var a=new Date(r.시스템시작),b=new Date(r.보고시작);
+                    return Math.round((b-a)/86400000)+'일';}}], LR.개시일차)+
+          '<p style="margin-top:7px;font-size:11.5px">개시일이 틀리면 휴직 기간·잔여 연차 산정이 모두 어긋납니다.</p></div>'+
+        '<div class="card"><h3>복직일이 다른 '+LR.복직일차.length+'명</h3>'+
+          table([{label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+                 {label:'5240',render:function(r){return r.시스템복직미정?'<span class="sev 치명">미정</span>':esc(r.시스템복직);}},
+                 {label:'보고서',render:function(r){return '<span style="color:var(--crit)">'+esc(r.보고복직)+'</span>';}}], LR.복직일차)+
+          '<p style="margin-top:7px;font-size:11.5px">복직 예정일로 결원을 계획하는 <b>8-2 휴직자 관리</b> 화면이 이만큼 어긋나 있습니다.</p></div>'+
+        '</div>',true);
+    }
+
+    /* ⑤ 5240 연동 ---------------------------------------------- */
+    if(vdlTab==='api'){
+      h+=panel('인증키 생성 — 검증 완료','명세서에 적힌 공식을 코드로 구현해 명세 예시값과 대조했습니다.',
+        '<div class="cards">'+
+        '<div class="card" style="border-color:var(--good,var(--accent))"><h3>키 공식</h3>'+
+          '<p class="metric" style="font-size:12.5px;white-space:normal">'+esc(AP.키공식)+'</p>'+
+          '<dl class="kv">'+
+            '<dt>서비스영역ID</dt><dd class="metric">'+AP.키검증.서비스영역ID+'</dd>'+
+            '<dt>조회일자</dt><dd class="metric">'+AP.키검증.조회일자+'</dd>'+
+            '<dt>계산값</dt><dd class="metric">'+AP.키검증.계산값+'</dd>'+
+            '<dt>명세 예시</dt><dd class="metric">'+AP.키검증.명세예시+'</dd>'+
+            '<dt>결과</dt><dd><span class="sev 참고">일치</span></dd>'+
+          '</dl>'+
+          '<p style="margin-top:8px">'+esc(AP.키검증.설명)+'</p></div>'+
+        '<div class="card"><h3>엔드포인트</h3>'+
+          '<dl class="kv">'+
+            '<dt>URL</dt><dd class="metric" style="font-size:11.5px;word-break:break-all">'+esc(AP.URL)+'</dd>'+
+            '<dt>방식</dt><dd>'+esc(AP.방식)+'</dd>'+
+            '<dt>interfaceId</dt><dd class="metric">'+esc(AP.interfaceId)+'</dd>'+
+            '<dt>조회 단위</dt><dd>'+esc(AP.조회단위)+'</dd>'+
+            '<dt>공급사</dt><dd>'+esc(AP.공급사)+' · '+esc(AP.담당)+'</dd>'+
+          '</dl>'+
+          '<h3 style="margin-top:10px">응답 항목</h3><p>'+AP.응답항목.map(esc).join(' · ')+'</p>'+
+          '<h3 style="margin-top:8px">요청했으나 미제공</h3><p style="color:var(--crit)">'+AP.미제공.map(esc).join(' · ')+'</p></div>'+
+        '</div>',true);
+
+      var CL=AP.클라이언트;
+      h+=panel('클라이언트 — '+esc(CL.파일),esc(CL.상태)+'. 인증정보는 환경변수로만 받고 코드·저장소에 남기지 않았습니다.',
+        table([
+          {label:'명령',render:function(r){return '<span class="metric" style="font-size:11.5px">api5240.py '+esc(r.명령)+'</span>';}},
+          {label:'하는 일',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:34ch">'+esc(r.설명)+'</span>';}},
+          {label:'검증',render:function(r){return '<span class="sev '+(r.검증.indexOf('통과')>=0?'참고':'주의')+'">'+esc(r.검증)+'</span>';}}
+        ], CL.명령)+
+        '<p style="margin-top:9px"><b>판정 규칙</b> — '+esc(CL.판정규칙)+'</p>'+
+        '<p><b>인증정보</b> — '+esc(CL.인증정보)+'</p>');
+
+      var NW=AP.망;
+      h+=panel('지금 막혀 있는 것 — 망','',
+        '<div class="card" style="border-color:var(--crit)">'+
+        '<dl class="kv">'+
+          '<dt>도달 여부</dt><dd><span class="sev 치명">도달 불가</span></dd>'+
+          '<dt>DNS</dt><dd class="metric">'+esc(NW.DNS)+'</dd>'+
+          '<dt>차단 지점</dt><dd>'+esc(NW.차단지점)+'</dd>'+
+        '</dl>'+
+        '<p style="margin-top:9px">'+esc(NW.의미)+'</p></div>'+
+        '<div class="cards" style="margin-top:11px">'+NW.선택지.map(function(o){
+          return '<div class="card"'+(o.권장?' style="border-color:var(--accent)"':'')+'>'+
+            '<div class="eyebrow">'+(o.권장?'권장':'대안')+'</div><h3>'+esc(o.안)+'</h3>'+
+            '<p><b>장점</b> '+esc(o.장점)+'</p><p><b>단점</b> '+esc(o.단점)+'</p></div>';
+        }).join('')+'</div>',true);
+
+      h+=panel('일일보고 항목별 자동화 판정','보고서를 '+Y.커버리지.length+'개 블록으로 나눠 5240 응답만으로 만들 수 있는지 판정했습니다.',
+        table([
+          {label:'보고서 블록',render:function(r){return '<b style="white-space:normal;display:inline-block;min-width:22ch">'+esc(r.블록)+'</b>';}},
+          {label:'자동화',render:function(r){return '<span class="sev '+(r.자동화==='가능'?'참고':(r.자동화==='조건부'?'주의':'치명'))+'">'+esc(r.자동화)+'</span>';}},
+          {label:'중요도',render:function(r){return esc(r.비중);}},
+          {label:'근거',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:40ch">'+esc(r.근거)+'</span>';}}
+        ], Y.커버리지, 0, function(r){ return r.자동화==='불가'?'stripe-치명':(r.자동화==='조건부'?'stripe-주의':''); })+
+        '<p style="margin-top:9px">가능 '+Y.커버리지요약.가능+' · 조건부 '+Y.커버리지요약.조건부+' · 불가 '+Y.커버리지요약.불가+
+        ' → 가중 자동화율 <b>'+pct(Y.커버리지요약.자동화율)+'</b>. '+
+        '「불가」 5건은 금액·외부인력·해외법인·업무일지로, API가 아니라 단가표 등록과 입력 폼으로 해결해야 합니다.</p>');
+
+      h+=panel('연결 계획','',
+        '<div class="steps">'+Y.계획.map(function(p){
+          return '<div class="step"><div class="qn">'+String(p.단계).padStart(2,'0')+'</div><div>'+
+            '<h3>'+esc(p.작업)+' <span class="sev '+(p.상태.indexOf('완료')>=0?'참고':(p.상태==='대기'?'주의':'치명'))+'">'+esc(p.상태)+'</span></h3>'+
+            '<p><span class="muted">담당</span> '+esc(p.담당)+' · <span class="muted">산출</span> '+esc(p.산출)+'</p>'+
+            '<p>'+esc(p.메모)+'</p></div></div>';
+        }).join('')+'</div>',true);
+
+      h+=panel('자동화하면 무엇이 달라지나','',
+        '<div class="cards">'+
+        '<div class="card"><h3>지금 수기로 채우는 항목</h3><p>'+Y.절감.현행_수기항목.map(function(x){
+          return '· '+esc(x);}).join('<br>')+'</p></div>'+
+        '<div class="card" style="border-color:var(--accent)"><h3>시간</h3>'+
+          '<dl class="kv">'+
+            '<dt>현행 작성</dt><dd class="metric">'+Y.절감.추정_작성시간_분+'분/일</dd>'+
+            '<dt>자동화 후 검토</dt><dd class="metric">'+Y.절감.자동화후_검토시간_분+'분/일</dd>'+
+            '<dt>연간 절감</dt><dd class="metric">약 '+Y.절감.연간절감_시간+'시간</dd>'+
+          '</dl></div>'+
+        '<div class="card" style="border-color:var(--crit)"><h3>더 중요한 것 — 정확도</h3><p>'+esc(Y.절감.핵심가치)+'</p></div>'+
+        '</div>',true);
+    }
+
+    /* ⑥ 발견과 업무일지 ---------------------------------------- */
+    if(vdlTab==='발견'){
+      h+=panel('오늘 보고서에서 찾은 것 '+Y.발견.length+'건','수치를 다시 계산하고 다른 자료와 대조한 결과입니다.',
+        '<div class="steps">'+Y.발견.map(function(f){
+          return '<div class="step"><div class="qn">'+String(f.순위).padStart(2,'0')+'</div><div>'+
+            '<h3>'+esc(f.제목)+'</h3><p>'+esc(f.내용)+'</p>'+
+            '<p style="color:var(--accent)"><b>조치</b> — '+esc(f.조치)+'</p></div></div>';
+        }).join('')+'</div>',true);
+
+      h+=panel('채용 진행 '+Y.채용.length+'건','',
+        table([
+          {label:'구분',render:function(r){return '<span class="sev 참고">'+esc(r.구분)+'</span>';}},
+          {label:'건',render:function(r){return '<b>'+esc(r.건)+'</b>';}},
+          {label:'일시',render:function(r){return dash(r.일시);}},
+          {label:'채널·장소',render:function(r){return dash(r.장소);}},
+          {label:'상태',render:function(r){return '<span class="sev '+(r.상태==='대기'||r.상태==='예정'?'주의':'참고')+'">'+esc(r.상태)+'</span>';}}
+        ], Y.채용)+
+        '<div class="card" style="border-color:var(--warn);margin-top:11px"><h3>물류 박범진 희망연봉 — 읽어야 할 것</h3>'+
+        '<p>'+esc(Y.채용메모.박범진)+'</p></div>');
+
+      h+=panel('인사서무 '+Y.서무.length+'건','',
+        table([
+          {label:'분류',render:function(r){return '<span class="sev '+(r.분류==='시스템'?'주의':'참고')+'">'+esc(r.분류)+'</span>';}},
+          {label:'항목',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'내용',render:function(r){return r.내용?'<span style="white-space:normal;display:inline-block;min-width:36ch">'+esc(r.내용)+'</span>':'<span class="muted">-</span>';}}
+        ], Y.서무)+
+        '<p style="margin-top:9px;color:var(--warn)"><b>지적</b> — '+esc(Y.서무지적)+'</p>');
+    }
+
+    h+=note('※ 출처 — '+esc(Y.출처)+'. '+Y.한계.map(esc).join(' '));
+    return h;
+  }
   function vAp(){
     var P=D.applyDesk, recs=noP(P.records);
     var eduN=(P.fill.filter(function(f){return f.항목==='학력';})[0]||{}).기재||0;
@@ -3380,6 +3747,7 @@
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
     {id:'vcal',n:'8-1',t:'근태 달력 · 휴가계획',     g:'직원', f:vCal},
     {id:'vlv',n:'8-2',t:'휴직자 관리',              g:'직원', f:vLv},
+    {id:'vdl',n:'8-3',t:'일일 인사 보고 · 5240',  g:'직원', f:vDaily},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
     {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
@@ -3474,6 +3842,11 @@
       var fq=document.getElementById('vfq');
       if(fq) fq.addEventListener('input',function(){ vfQ=fq.value; renderForeign(); });
       renderForeign();
+    }
+    if(id==='vdl'){
+      document.querySelectorAll('[data-vdl]').forEach(function(b){
+        b.addEventListener('click',function(){ vdlTab=b.getAttribute('data-vdl'); go('vdl'); });
+      });
     }
     if(id==='vrc'){
       document.querySelectorAll('[data-vrc]').forEach(function(b){

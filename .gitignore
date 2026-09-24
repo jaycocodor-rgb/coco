@@ -8,3 +8,4 @@ analysis/ot_part.py
 __pycache__/
 deck/*.pptx
 deck/deck.js
+analysis/daily_part.py
