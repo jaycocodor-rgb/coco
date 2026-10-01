@@ -55,6 +55,19 @@ def pay_of(r):
     return tot, irr, na
 
 
+
+# ── 계약 마스터의 계약연봉 원값 (월×12 환산이 아닌 계약서 금액) ──────
+CM = {}
+_cm = json.load(open('contract_master.json', encoding='utf-8'))
+for sec in ('코코도르', '코코도르팜', '임원', '퇴사자'):
+    for r in _cm.get(sec, []):
+        no = str(r.get('사번') or '').strip()
+        if not no:
+            continue
+        CM[no] = {'계약연봉': num(r.get('계약연봉')), '월급여': num(r.get('월급여')),
+                  '계약일': r.get('연봉 계약일'), '계약종료일': r.get('연봉 계약종료일'),
+                  '직종': r.get('직종'), '인건비구분': r.get('인건비구분')}
+
 PAY2508, NA2508 = {}, 0
 for f in ('pay_2508_코코도르.json', 'pay_2508_코코도르팜.json'):
     for r in json.load(open(f, encoding='utf-8')):
@@ -72,35 +85,64 @@ def yr(m):
     m = num(m)
     return round(m * MONTHS) if m else None
 
+THIS_YEAR = 2026
+
+def yrange(a, b):
+    try:
+        return int(str(a)[:4]), int(str(b)[:4])
+    except (TypeError, ValueError):
+        return None, None
+
+
 ROWS, matched2508 = [], 0
 for no, e in EMP.items():
     py = PY.get(no, {})
     rs = RS.get(no, {})
     p8 = PAY2508.get(no)
+    cm = CM.get(no, {})
     if p8:
         matched2508 += 1
 
-    계약 = [
-        {'시점': '2024-09', '구분': '계약', '월': py.get('계약_2024_09'), '연봉': yr(py.get('계약_2024_09')),
-         '출처': '계약 마스터 2024-09-30'},
-        {'시점': '2025-07', '구분': '계약', '월': num(py.get('계약_2025_07')), '연봉': yr(py.get('계약_2025_07')),
-         '출처': '2025-07 급여총괄'},
-        {'시점': '2026-02', '구분': '계약', '월': num(e.get('계약급여')), '연봉': yr(e.get('계약급여')),
-         '출처': '2026-02 급여대장'},
-    ]
+    join = e.get('입사일')
+    try:
+        y0 = int(str(join)[:4])
+    except (TypeError, ValueError):
+        y0 = THIS_YEAR
+    y0 = max(2000, min(y0, THIS_YEAR))
+
+    cy0, cy1 = yrange(cm.get('계약일'), cm.get('계약종료일'))
     irr02 = sum(num(e.get(c)) or 0 for c in IRREG)
     tot02 = num(e.get('지급총액')) or 0
-    실지급 = [
-        {'시점': '2025-08', '구분': '실지급', '월': (p8 or {}).get('지급총액'),
-         '연봉': yr((p8 or {}).get('지급총액')),
-         '비정기': (p8 or {}).get('비정기'), '정기월': (p8 or {}).get('정기'),
-         '정기연봉': yr((p8 or {}).get('정기')),
-         '출처': '2025-08 급여대장 (항목 재합산)'},
-        {'시점': '2026-02', '구분': '실지급', '월': tot02, '연봉': yr(tot02),
-         '비정기': irr02, '정기월': tot02 - irr02, '정기연봉': yr(tot02 - irr02),
-         '출처': '2026-02 급여대장'},
-    ]
+    p8tot = (p8 or {}).get('지급총액')
 
+    # 연도축 — 입사년도부터 올해까지 한 해도 빠뜨리지 않는다
+    연도별 = []
+    for Y in range(y0, THIS_YEAR + 1):
+        계약, 계약출처 = None, None
+        if cy0 is not None and cy0 <= Y <= (cy1 if cy1 is not None else cy0):
+            계약, 계약출처 = cm.get('계약연봉'), '계약서 (%s~%s)' % (cm.get('계약일'), cm.get('계약종료일'))
+        elif Y == 2026 and num(e.get('계약급여')):
+            계약, 계약출처 = yr(e.get('계약급여')), '2026-02 급여대장 × 12'
+        elif Y == 2025 and num(py.get('계약_2025_07')):
+            계약, 계약출처 = yr(py.get('계약_2025_07')), '2025-07 급여총괄 × 12'
+        elif Y == 2024 and num(py.get('계약_2024_09')):
+            계약, 계약출처 = yr(py.get('계약_2024_09')), '계약 마스터 2024-09 × 12'
+
+        실지급, 실출처, 비정기 = None, None, None
+        if Y == 2026 and tot02:
+            실지급, 실출처, 비정기 = yr(tot02), '2026-02 급여대장 × 12', irr02
+        elif Y == 2025 and p8tot:
+            실지급, 실출처, 비정기 = yr(p8tot), '2025-08 급여대장 × 12', (p8 or {}).get('비정기')
+
+        연도별.append({
+            '연도': Y, '계약연봉': 계약, '계약출처': 계약출처,
+            '실지급연봉': 실지급, '실지급출처': 실출처, '비정기': 비정기,
+            '차이': (실지급 - 계약) if (계약 and 실지급) else None,
+            '상태': ('둘다' if (계약 and 실지급) else ('계약만' if 계약 else ('실지급만' if 실지급 else '자료없음'))),
+            '입사년': Y == y0,
+        })
+
+    보유 = [y for y in 연도별 if y['상태'] != '자료없음']
     cur계약 = yr(e.get('계약급여'))
     cur실지급 = yr(tot02)
     cur정기 = yr(tot02 - irr02)
@@ -109,18 +151,22 @@ for no, e in EMP.items():
 
     ROWS.append({
         '직원번호': no, '성명': e['성명'], '법인': e['법인'], '소속': e['소속'], '직책': e['직책'],
-        '입사일': e.get('입사일'), '근속년수': e.get('근속년수'), '재직상태': e.get('재직상태') or '정상',
+        '입사일': join, '입사년도': y0, '근속년수': e.get('근속년수'),
+        '재직상태': e.get('재직상태') or '정상',
         '직군': e.get('직군'), '직군세부': e.get('직군세부'), '등급': py.get('등급'),
-        '계약': 계약, '실지급': 실지급,
+        '직종': cm.get('직종'), '인건비구분': cm.get('인건비구분'),
+        '연도별': 연도별, '연수': len(연도별), '자료보유연수': len(보유),
+        '공백연수': len(연도별) - len(보유),
+        '계약서연봉': cm.get('계약연봉'), '계약기간': (cm.get('계약일'), cm.get('계약종료일')),
         '현재_계약연봉': cur계약, '현재_실지급연봉': cur실지급, '현재_정기연봉': cur정기,
         '비정기_2026_02': irr02,
         '격차': 격차, '격차율': (round(격차 / cur계약, 4) if (격차 is not None and cur계약) else None),
         '격차_정기': 격차정기,
         '격차율_정기': (round(격차정기 / cur계약, 4) if (격차정기 is not None and cur계약) else None),
         '누적인상률': rs.get('누적인상률'), '연환산인상률': rs.get('연환산_누적'),
-        '계약시점수': sum(1 for c in 계약 if c['연봉']),
-        '실지급시점수': sum(1 for c in 실지급 if c['연봉']),
-        '입사전공백': (e.get('입사일') or '9999') < '2024-09-01',
+        '계약시점수': sum(1 for y in 연도별 if y['계약연봉']),
+        '실지급시점수': sum(1 for y in 연도별 if y['실지급연봉']),
+        '입사전공백': y0 < 2024,
     })
 
 ROWS.sort(key=lambda r: -(r['현재_계약연봉'] or 0))
@@ -178,10 +224,14 @@ for lab, lo, hi in 밴드:
 
 META = {
     '시점': [
-        {'시점': '2024-09', '구분': '계약 연봉', '출처': '계약 마스터 (2024-09-30 기준)', '보유': sum(1 for r in ROWS if r['계약'][0]['연봉'])},
-        {'시점': '2025-07', '구분': '계약 연봉', '출처': '2025-07 급여총괄 시트', '보유': sum(1 for r in ROWS if r['계약'][1]['연봉'])},
-        {'시점': '2025-08', '구분': '실지급 (세전)', '출처': '2025-08 급여대장', '보유': sum(1 for r in ROWS if r['실지급'][0]['연봉'])},
-        {'시점': '2026-02', '구분': '계약 + 실지급', '출처': '2026-02 급여대장', '보유': sum(1 for r in ROWS if r['계약'][2]['연봉'])},
+        {'시점': '2024', '구분': '계약 연봉', '출처': '계약 마스터 — 계약서 금액과 계약기간',
+         '보유': sum(1 for r in ROWS for y in r['연도별'] if y['연도'] == 2024 and y['계약연봉'])},
+        {'시점': '2025', '구분': '계약 연봉', '출처': '2025-07 급여총괄 × 12',
+         '보유': sum(1 for r in ROWS for y in r['연도별'] if y['연도'] == 2025 and y['계약연봉'])},
+        {'시점': '2025', '구분': '실지급 연봉', '출처': '2025-08 급여대장 × 12 (항목 재합산)',
+         '보유': sum(1 for r in ROWS for y in r['연도별'] if y['연도'] == 2025 and y['실지급연봉'])},
+        {'시점': '2026', '구분': '계약 + 실지급', '출처': '2026-02 급여대장 × 12',
+         '보유': sum(1 for r in ROWS for y in r['연도별'] if y['연도'] == 2026 and y['실지급연봉'])},
     ],
     '연봉정의': {
         '계약 연봉': '계약급여(기본급 + 고정연장수당) × 12. 근로계약서상 확정 금액입니다.',
