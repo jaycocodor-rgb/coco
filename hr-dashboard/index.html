@@ -846,67 +846,92 @@
   }
 
   var v5Sel=null, v5Dept='전체';   /* '전체' | 'FN:<기능본부>' | '<소속>' */
-  /* ── 5. 연봉 히스토리 보조 ─────────────────────────────── */
-  var v5Tab='개인', v5DTab='명세', v5aQ='';
+  /* ── 5. 연봉 히스토리 — 입사년도부터 현재까지 ──────────────── */
+  var v5Tab='개인', v5DTab='연봉', v5aQ='';
+  /* ② 조건 조회 상태 — 연도 · 법인 · 직군 · 소속 · 연봉 구간 · 정렬 */
+  var v5qY=2026, v5qCo='전체', v5qJc='전체', v5qDept='전체',
+      v5qMin='', v5qMax='', v5qSort='계약', v5qQ='', v5qOnly=false;
   function annOf(e){
     if(!e || !D.annual) return null;
     return D.annual.rows.filter(function(r){
       return String(r.직원번호)===String(e.직원번호) && r.성명===e.성명; })[0]||null;
   }
-  function annPoints(a){   /* 계약 + 실지급을 시점 순으로 한 줄에 */
-    return a.계약.concat(a.실지급).filter(function(p){return p.연봉;})
-            .sort(function(x,y){ return x.시점<y.시점?-1:(x.시점>y.시점?1:(x.구분==='계약'?-1:1)); });
-  }
-  function annTrack(a,kind){  /* 같은 구분끼리 전 시점 대비 증감 */
-    var arr=(kind==='계약'?a.계약:a.실지급).filter(function(p){return p.연봉;});
-    return arr.map(function(p,i){
-      var prev=i?arr[i-1].연봉:null;
-      return {시점:p.시점,구분:p.구분,월:p.월,연봉:p.연봉,출처:p.출처,
-              비정기:p.비정기, 정기월:p.정기월, 정기연봉:p.정기연봉,
-              증감:prev?p.연봉-prev:null, 증감률:prev?(p.연봉-prev)/prev:null};
+  /* 자료 없는 해가 3년 이상 이어지면 한 줄로 접는다 */
+  function annYears(a){
+    var out=[], run=[];
+    function flush(){
+      if(!run.length) return;
+      if(run.length>=3){
+        out.push({묶음:true, 연도:run[0].연도+'~'+run[run.length-1].연도,
+                  연수:run.length, 상태:'자료없음',
+                  입사년:run.some(function(x){return x.입사년;})});
+      } else { run.forEach(function(x){ out.push(x); }); }
+      run=[];
+    }
+    a.연도별.forEach(function(y){
+      if(y.상태==='자료없음'){ run.push(y); return; }
+      flush(); out.push(y);
     });
+    flush();
+    return out;
   }
   function annGapNote(a){
-    if(a.격차_정기===null||a.격차_정기===undefined) return '';
-    var up=a.격차_정기>=0;
-    var t='계약 연봉 '+man(a.현재_계약연봉)+' 대비 <b>매월 반복해서</b> 나가는 금액은 '+man(a.현재_정기연봉)+
-      '으로 <b class="'+(up?'neg':'pos')+'">'+(up?'+':'')+man(a.격차_정기)+'</b> ('+spct(a.격차율_정기)+
-      ') 차이입니다. 연장·휴일근무 수당 등입니다.';
+    if(a.격차===null||a.격차===undefined) return '';
+    var up=a.격차>=0;
+    var t='가장 최근 해(2026) 기준 — 계약연봉 '+man(a.현재_계약연봉)+' 대비 실제 지급연봉 '+man(a.현재_실지급연봉)+
+      '으로 <b class="'+(up?'neg':'pos')+'">'+(up?'+':'')+man(a.격차)+'</b> ('+spct(a.격차율)+') 차이입니다.';
     if(a.비정기_2026_02)
-      t+=' 여기에 2026-02에 들어간 상여·연차수당 '+man(a.비정기_2026_02)+
-         '을 더해 12배 하면 '+man(a.현재_실지급연봉)+'이 되는데, <b>매달 받는 금액이 아니므로 연봉으로 쓰면 안 됩니다.</b>';
+      t+=' 이 중 <b>'+man(a.비정기_2026_02*12)+'</b>은 상여·연차수당이 들어간 달을 12배 한 몫이라 매달 받는 금액이 아닙니다. '+
+         '그 몫을 빼면 '+man(a.현재_정기연봉)+'('+spct(a.격차율_정기)+')입니다.';
+    else t+=' 2026-02에는 상여·연차수당이 없어 그대로 읽어도 됩니다.';
     return t;
   }
   function annTimeline(a){
-    var mx=Math.max.apply(null,annPoints(a).map(function(p){return p.연봉;}).concat([0]));
-    var C=annTrack(a,'계약'), A=annTrack(a,'실지급');
-    var h=table([
-      {label:'시점',render:function(r){return '<b>'+esc(r.시점)+'</b>';}},
-      {label:'구분',render:function(r){return '<span class="sev '+(r.구분==='계약'?'참고':'주의')+'">'+esc(r.구분)+'</span>';}},
-      {label:'월 금액',num:true,render:function(r){return won(r.월);}},
-      {label:'연봉 환산',num:true,cls:'strong',render:function(r){return won(r.연봉);}},
-      {label:'그중 비정기(월)',num:true,render:function(r){
-        if(r.구분==='계약') return '<span class="muted">해당 없음</span>';
-        return r.비정기?'<b class="neg">'+won(r.비정기)+'</b>':'<span class="muted">없음</span>';}},
-      {label:'정기 연봉',num:true,render:function(r){
-        return r.구분==='계약'?'<span class="muted">-</span>':dash(r.정기연봉,won);}},
-      {label:'직전 대비',num:true,render:function(r){return r.증감===null?'<span class="muted">기준</span>':sign(r.증감,man);}},
-      {label:'증감률',num:true,render:function(r){return r.증감률===null?'<span class="muted">-</span>':spct(r.증감률);}},
-      {label:'',render:function(r){return bar(r.연봉,mx);}},
-      {label:'출처',render:function(r){return '<span class="muted">'+esc(r.출처)+'</span>';}}
-    ], C.concat(A), 0, function(r){ return r.구분==='실지급'?'stripe-주의':'stripe-참고'; });
-    return h;
+    var rows=annYears(a);
+    var mx=maxOf(a.연도별,function(y){return Math.max(y.계약연봉||0,y.실지급연봉||0);});
+    return table([
+      {label:'연도',render:function(r){
+        return '<b>'+esc(r.연도)+'</b>'+(r.입사년?' <span class="sev 참고">입사</span>':'');}},
+      {label:'계약연봉',num:true,cls:'strong',render:function(r){
+        if(r.묶음) return '<span class="muted">-</span>';
+        return r.계약연봉?won(r.계약연봉):'<span class="muted">자료 없음</span>';}},
+      {label:'실제 지급연봉',num:true,cls:'strong',render:function(r){
+        if(r.묶음) return '<span class="muted">-</span>';
+        return r.실지급연봉?won(r.실지급연봉):'<span class="muted">자료 없음</span>';}},
+      {label:'차이',num:true,render:function(r){
+        if(r.묶음||r.차이===null||r.차이===undefined) return '<span class="muted">-</span>';
+        return sign(r.차이,man);}},
+      {label:'그중 비정기',num:true,render:function(r){
+        if(r.묶음||!r.비정기) return '<span class="muted">-</span>';
+        return '<b class="neg">'+man(r.비정기*12)+'</b>';}},
+      {label:'',render:function(r){
+        if(r.묶음) return '';
+        var v=Math.max(r.계약연봉||0,r.실지급연봉||0);
+        return v?bar(v,mx):'';}},
+      {label:'출처',render:function(r){
+        if(r.묶음) return '<span class="muted">급여 자료가 없는 구간입니다 ('+r.연수+'년)</span>';
+        var t=[];
+        if(r.계약출처) t.push('계약 '+r.계약출처);
+        if(r.실지급출처) t.push('실지급 '+r.실지급출처);
+        return t.length?'<span class="muted" style="white-space:normal;display:inline-block;min-width:30ch">'+esc(t.join(' · '))+'</span>'
+                       :'<span class="muted">-</span>';}}
+    ], rows, 0, function(r){
+      return r.묶음?'':(r.상태==='둘다'?'':'stripe-주의'); });
   }
   function v5(){
     var m=D.historyMeta;
-    var h=head('5. 개인별 급여 히스토리 조회','이름으로 찾아 2026-02 급여명세를 항목별로 열람하고, 계약급여 3개 시점과 수당·휴가 현황을 함께 봅니다.',['part','3개 시점']);
+    var AS=D.annual.summary;
+    var h=head('5. 개인별 연봉 히스토리','입사년도부터 올해까지 <b>계약연봉</b>과 <b>실제 지급연봉</b>을 연도별로 봅니다. '+
+      '목록은 연봉 많은 순입니다.',['part','확보 연도만']);
     h+='<div class="kpi-row">'+
-      kpi('조회 대상',cnt(HC)+'명','2026-02 급여대장 전원')+
-      kpi('3시점 보유',D.raiseSummary['3시점보유']+'명','2024-09 · 2025-07 · 2026-02')+
-      kpi('연환산 인상률(중위)',pct(D.raiseSummary.연환산_중위),'정상재직 '+D.raiseSummary.정상비교+'명')+
-      kpi('월 인건비 증가',man(D.raiseSummary.월인건비증가),D.raiseSummary.기간)+
+      kpi('조회 대상',cnt(HC)+'명','연봉 많은 순 정렬')+
+      kpi('계약연봉 1인평균',man(AS.계약연봉_평균),'전사 '+eok(AS.계약연봉_합),'lead')+
+      kpi('실지급연봉 1인평균',man(AS.실지급연봉_평균),'전사 '+eok(AS.실지급연봉_합),'lead')+
+      kpi('계약 대비',spct(AS.격차율_전사),man(AS.격차_합)+' 더 나감','bad')+
+      kpi('입사~자료 공백',AS.입사전공백+'명','2024년 이전 입사자','warn')+
+      kpi('연환산 인상률(중위)',pct(D.raiseSummary.연환산_중위),'2024 → 2026')+
       '</div>';
-    var T=[['개인','① 개인별 조회'],['전사','② 전사 연봉 분포']];
+    var T=[['개인','① 개인별 조회'],['조회','② 조건 조회'],['전사','③ 전사 연봉 분포']];
     h+='<div class="searchbar">'+T.map(function(t){
       return '<button class="nav-item'+(v5Tab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-v5t="'+t[0]+'">'+t[1]+'</button>';
     }).join('')+'</div>';
@@ -922,7 +947,54 @@
       return h;
     }
 
-    /* ② 전사 연봉 분포 */
+    /* ② 조건 조회 — 연도를 골라 그 해의 계약연봉·실제 지급연봉을 조건별로 찾습니다 */
+    if(v5Tab==='조회'){
+      var QR=noP(FL(D.annual.rows));
+      var opt=function(v,lab,cur){ return '<option value="'+esc(v)+'"'+(String(cur)===String(v)?' selected':'')+'>'+esc(lab)+'</option>'; };
+      var uniq=function(f){
+        var m={}; QR.forEach(function(r){ var k=f(r); if(k) m[k]=(m[k]||0)+1; });
+        return Object.keys(m).sort().map(function(k){ return [k,k+' ('+m[k]+')']; });
+      };
+      /* 연도 칩 — 그 해에 계약이든 실지급이든 자료가 있는 사람 수를 함께 적는다 */
+      var YS=[];
+      for(var yy=ANN_Y0(QR); yy<=2026; yy++){
+        var n=QR.filter(function(r){ return annYearOf(r,yy) && annYearOf(r,yy).상태!=='자료없음'; }).length;
+        YS.push({연도:yy, 보유:n});
+      }
+      var YH=YS.filter(function(y){return y.보유;}), YE=YS.filter(function(y){return !y.보유;});
+      h+='<div class="searchbar"><span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-right:4px">연도</span>'+
+        YH.slice().reverse().map(function(y){
+          return '<button class="co-btn'+(v5qY===y.연도?' on':'')+'" data-v5qy="'+y.연도+'">'+y.연도+
+            '<span class="co-n">'+y.보유+'</span></button>';
+        }).join('')+
+        (YE.length?'<span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-left:6px">'+
+          YE[0].연도+'~'+YE[YE.length-1].연도+' ('+YE.length+'년)은 급여·계약 원본이 없어 조회할 수 없습니다</span>':'')+
+        '</div>';
+      h+='<div class="searchbar">'+
+        '<input id="v5qq" type="search" placeholder="이름 · 사번 검색" value="'+esc(v5qQ)+'">'+
+        '<select id="v5qco"><option value="전체">법인 전체</option>'+uniq(function(r){return r.법인;}).map(function(o){return opt(o[0],o[1],v5qCo);}).join('')+'</select>'+
+        '<select id="v5qjc"><option value="전체">직군 전체</option>'+uniq(function(r){return r.직군세부;}).map(function(o){return opt(o[0],o[1],v5qJc);}).join('')+'</select>'+
+        '<select id="v5qdept"><option value="전체">소속 전체</option>'+uniq(function(r){return r.소속;}).map(function(o){return opt(o[0],o[1],v5qDept);}).join('')+'</select>'+
+        '</div>';
+      h+='<div class="searchbar">'+
+        '<span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-right:4px">연봉 구간(만원)</span>'+
+        '<input id="v5qmin" type="number" inputmode="numeric" placeholder="최소" style="max-width:110px" value="'+esc(v5qMin)+'">'+
+        '<span style="align-self:center;color:var(--ink-3)">~</span>'+
+        '<input id="v5qmax" type="number" inputmode="numeric" placeholder="최대" style="max-width:110px" value="'+esc(v5qMax)+'">'+
+        '<select id="v5qsort">'+[['계약','계약연봉 많은 순'],['실지급','실제 지급연봉 많은 순'],
+           ['차이','차이 큰 순'],['근속','근속 긴 순'],['입사','입사일 빠른 순'],['이름','이름순']]
+          .map(function(o){return opt(o[0],o[1],v5qSort);}).join('')+'</select>'+
+        '<button class="co-btn'+(v5qOnly?' on':'')+'" data-v5qonly="1">자료 있는 사람만</button>'+
+        '<button class="co-btn" data-v5qreset="1">조건 초기화</button>'+
+        '</div>';
+      h+='<div id="v5qres"></div>';
+      h+=note('※ 구간 조건은 「계약연봉」에 걸립니다. 그 해 계약연봉 자료가 없는 사람은 구간 조건을 걸면 빠집니다. '+
+        '연도별 자료 범위는 사람마다 다릅니다 — 입사년도부터 자료가 처음 생기는 해까지는 비어 있습니다.');
+      h+=hideNote();
+      return h;
+    }
+
+    /* ③ 전사 연봉 분포 */
     var AN=D.annual, S=AN.summary;
     h+='<div class="kpi-row">'+
       kpi('계약 연봉 합계',eok(S.계약연봉_합),'1인 평균 '+man(S.계약연봉_평균))+
@@ -977,6 +1049,105 @@
     h+=hideNote();
     return h;
   }
+  /* 조건 조회 보조 — 사람의 특정 연도 행, 그리고 조회 대상의 최초 입사년도 */
+  function annYearOf(r,y){
+    if(!r||!r.연도별) return null;
+    return r.연도별.filter(function(x){ return x.연도===y; })[0]||null;
+  }
+  function ANN_Y0(rows){
+    var y0=2026;
+    rows.forEach(function(r){ if(r.입사년도 && r.입사년도<y0) y0=r.입사년도; });
+    return y0<2013?2013:y0;
+  }
+  function renderAnnQ(){
+    var el=document.getElementById('v5qres'); if(!el) return;
+    var Y=v5qY, q=v5qQ.trim().toLowerCase();
+    var mn=v5qMin===''?null:Number(v5qMin)*10000, mx=v5qMax===''?null:Number(v5qMax)*10000;
+    var rows=noP(FL(D.annual.rows)).map(function(r){
+      var y=annYearOf(r,Y)||{상태:'연도밖'};
+      return {성명:r.성명, 직원번호:r.직원번호, 법인:r.법인, 소속:r.소속, 직책:r.직책,
+              직군:r.직군세부, 입사일:r.입사일, 입사년도:r.입사년도, 근속년수:r.근속년수,
+              계약연봉:y.계약연봉||null, 실지급연봉:y.실지급연봉||null,
+              차이:(y.차이===null||y.차이===undefined)?null:y.차이,
+              비정기:y.비정기||null, 상태:y.상태, 입사년:!!y.입사년,
+              계약출처:y.계약출처||null, 실지급출처:y.실지급출처||null};
+    }).filter(function(r){
+      if(q && (r.성명+' '+r.소속+' '+(r.직원번호||'')).toLowerCase().indexOf(q)<0) return false;
+      if(v5qCo!=='전체' && r.법인!==v5qCo) return false;
+      if(v5qJc!=='전체' && r.직군!==v5qJc) return false;
+      if(v5qDept!=='전체' && r.소속!==v5qDept) return false;
+      if(v5qOnly && !(r.계약연봉||r.실지급연봉)) return false;
+      if(mn!==null || mx!==null){
+        if(!r.계약연봉) return false;
+        if(mn!==null && r.계약연봉<mn) return false;
+        if(mx!==null && r.계약연봉>mx) return false;
+      }
+      return true;
+    });
+    var S={
+      '계약':   function(a,b){ return (b.계약연봉||-1)-(a.계약연봉||-1); },
+      '실지급': function(a,b){ return (b.실지급연봉||-1)-(a.실지급연봉||-1); },
+      '차이':   function(a,b){ return Math.abs(b.차이||0)-Math.abs(a.차이||0); },
+      '근속':   function(a,b){ return (b.근속년수||0)-(a.근속년수||0); },
+      '입사':   function(a,b){ return (a.입사일||'9999')<(b.입사일||'9999')?-1:1; },
+      '이름':   function(a,b){ return a.성명<b.성명?-1:1; }
+    };
+    rows.sort(S[v5qSort]||S['계약']);
+    var have=rows.filter(function(r){return r.계약연봉||r.실지급연봉;});
+    var cSum=rows.reduce(function(a,r){return a+(r.계약연봉||0);},0);
+    var cN=rows.filter(function(r){return r.계약연봉;}).length;
+    var pSum=rows.reduce(function(a,r){return a+(r.실지급연봉||0);},0);
+    var pN=rows.filter(function(r){return r.실지급연봉;}).length;
+    var cond=[];
+    if(v5qCo!=='전체') cond.push('법인 '+v5qCo);
+    if(v5qJc!=='전체') cond.push('직군 '+v5qJc);
+    if(v5qDept!=='전체') cond.push('소속 '+v5qDept);
+    if(v5qMin!=='') cond.push('계약 '+v5qMin+'만원 이상');
+    if(v5qMax!=='') cond.push('계약 '+v5qMax+'만원 이하');
+    if(v5qOnly) cond.push('자료 있는 사람만');
+    if(v5qQ.trim()) cond.push('검색 「'+v5qQ.trim()+'」');
+
+    var h='<div class="kpi-row">'+
+      kpi('조회 결과',cnt(rows.length)+'명',Y+'년 · 자료 있는 인원 '+have.length+'명','lead')+
+      kpi('계약연봉 합계',cSum?eok(cSum):'<span style="font-size:14px">자료 없음</span>',cN?cN+'명 · 1인평균 '+man(Math.round(cSum/cN)):'')+
+      kpi('실제 지급연봉 합계',pSum?eok(pSum):'<span style="font-size:14px">자료 없음</span>',pN?pN+'명 · 1인평균 '+man(Math.round(pSum/pN)):'')+
+      kpi('계약 대비',(cN&&pN)?sign(pSum-cSum,man):'-',(cN&&pN)?spct(cSum?(pSum-cSum)/cSum:0):'같은 모수가 아니면 비교 불가',(cN&&pN&&pSum>cSum)?'bad':'')+
+      kpi('자료 없는 인원',(rows.length-have.length)+'명',Y+'년 급여·계약 자료 없음',(rows.length-have.length)?'warn':'')+
+      '</div>';
+    var mxv=maxOf(rows,function(r){return Math.max(r.계약연봉||0,r.실지급연봉||0);});
+    h+=panel(Y+'년 연봉 조회 — '+rows.length+'명',
+      (cond.length?'조건: '+esc(cond.join(' · '))+'. ':'조건 없이 전원입니다. ')+
+      '「계약연봉」은 그 해 유효한 연봉계약서 금액이고, 「실제 지급연봉」은 그 해 급여대장 실지급액(세전)입니다.',
+      rows.length?table([
+        {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+        {label:'성명',render:function(r){return '<b>'+esc(r.성명)+'</b>'+(r.입사년?' <span class="sev 참고">입사</span>':'');}},
+        {label:'법인',render:function(r){return esc(r.법인);}},
+        {label:'소속',render:function(r){return fnDot(r.소속)+' '+esc(r.소속);}},
+        {label:'직책',render:function(r){return dash(r.직책);}},
+        {label:'직군',render:function(r){return dash(r.직군);}},
+        {label:'입사일',render:function(r){return dash(r.입사일);}},
+        {label:'근속',num:true,render:function(r){return r.근속년수===null?'<span class="muted">-</span>':r.근속년수+'년';}},
+        {label:'계약연봉',num:true,cls:'strong',render:function(r){
+          return r.계약연봉?won(r.계약연봉):'<span class="muted">자료 없음</span>';}},
+        {label:'실제 지급연봉',num:true,cls:'strong',render:function(r){
+          return r.실지급연봉?won(r.실지급연봉):'<span class="muted">자료 없음</span>';}},
+        {label:'차이',num:true,render:function(r){
+          return r.차이===null?'<span class="muted">-</span>':sign(r.차이,man);}},
+        {label:'그중 비정기',num:true,render:function(r){
+          return r.비정기?'<b class="neg">'+man(r.비정기*12)+'</b>':'<span class="muted">-</span>';}},
+        {label:'',render:function(r){
+          var v=Math.max(r.계약연봉||0,r.실지급연봉||0);
+          return v?bar(v,mxv):'';}},
+        {label:'출처',render:function(r){
+          var t=[];
+          if(r.계약출처) t.push('계약 '+r.계약출처);
+          if(r.실지급출처) t.push('실지급 '+r.실지급출처);
+          return t.length?'<span class="muted" style="white-space:normal;display:inline-block;min-width:28ch">'+esc(t.join(' · '))+'</span>'
+                         :'<span class="muted">-</span>';}}
+      ], rows, '560px', function(r){ return (r.계약연봉||r.실지급연봉)?'':'stripe-주의'; })
+      : '<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">조건에 맞는 사람이 없습니다. 연도나 조건을 바꿔 보십시오.</div>');
+    el.innerHTML=h;
+  }
   function renderAnn(){
     var el=document.getElementById('antbl'); if(!el) return;
     var q=v5aQ.trim().toLowerCase();
@@ -1011,10 +1182,16 @@
       if(!q) return true;
       return (e.성명+' '+(e.직원번호||'')).toLowerCase().indexOf(q)>=0;
     });
+    /* 연봉 많은 순 — 계약연봉이 없으면 지급총액으로 */
+    function annPay(e){
+      var a=annOf(e);
+      return (a&&a.현재_계약연봉)||((e.지급총액||0)*12);
+    }
+    list.sort(function(x,y){ return annPay(y)-annPay(x); });
     var el=document.getElementById('pList'); if(!el) return;
     var lab=document.getElementById('pLab');
     if(lab) lab.innerHTML=(v5Dept==='전체'?'전체':(v5Dept.indexOf('FN:')===0?esc(v5Dept.slice(3))+' 팀':esc(v5Dept)))+
-      ' · <b>'+list.length+'명</b>'+(q?' · 검색 "'+esc(q)+'"':'');
+      ' · <b>'+list.length+'명</b> · 연봉 많은 순'+(q?' · 검색 "'+esc(q)+'"':'');
     if(!list.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">검색 결과가 없습니다.</div>'; v5Sel=null; }
     else{
       if(!v5Sel || !list.some(function(e){return (e.직원번호||e.성명)===(v5Sel.직원번호||v5Sel.성명);})) v5Sel=list[0];
@@ -1022,7 +1199,7 @@
         var sel=(e.직원번호||e.성명)===(v5Sel.직원번호||v5Sel.성명);
         return '<button class="person-row" aria-selected="'+(sel?'true':'false')+'" data-emp="'+esc(e.직원번호||e.성명)+'">'+
           '<span><b>'+esc(e.성명)+'</b><br><span class="sub">'+esc(e.소속)+' · '+esc(e.직책)+'</span></span>'+
-          '<span class="num" style="font-size:11.5px;text-align:right">'+man(e.지급총액)+
+          '<span class="num" style="font-size:11.5px;text-align:right">'+man(annPay(e))+
           '<br><span class="sub">'+(e.근속년수===null?'-':e.근속년수+'년')+'</span></span></button>';
       }).join('');
       el.querySelectorAll('[data-emp]').forEach(function(b){
@@ -1061,9 +1238,9 @@
     var h='<div class="panel flat">';
     h+='<div class="panel-head"><h2>'+esc(e.성명)+' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+
        esc(e.직원번호||'')+'</span> '+gradeChip(py.등급)+'</h2><div class="panel-note">'+
-       (v5DTab==='연봉'?'입사부터 현재까지 연봉 추이':'2026년 2월 귀속 급여명세')+'</div></div>';
+       (v5DTab==='연봉'?'입사 '+esc((e.입사일||'').slice(0,4))+'년부터 '+'2026년까지 연봉 추이':'2026년 2월 귀속 급여명세')+'</div></div>';
     h+='<div class="searchbar" style="margin-bottom:10px">'+
-       [['명세','① 월 급여명세'],['연봉','② 연봉 히스토리']].map(function(t){
+       [['연봉','① 연봉 히스토리'],['명세','② 월 급여명세']].map(function(t){
          return '<button class="nav-item'+(v5DTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-v5d="'+t[0]+'">'+t[1]+'</button>';
        }).join('')+'</div>';
     h+='<dl class="kv">'+
@@ -1075,38 +1252,46 @@
     if(v5DTab==='연봉'){
       if(!a){ el.innerHTML=h+'<div class="panel-note">이 직원의 연봉 자료가 없습니다.</div></div>'; bindDTab(); return; }
       h+='<div class="kpi-row" style="margin:12px 0 10px">'+
-        kpi('계약 연봉',dash(a.현재_계약연봉,won),'기본급+고정연장 ×12')+
-        kpi('정기 연봉',dash(a.현재_정기연봉,won),'비정기 제외 ×12 · 세전','lead')+
-        kpi('계약 대비',a.격차_정기===null?'-':sign(a.격차_정기,man),
-            '매월 반복분 '+(a.격차율_정기===null?'':pct(a.격차율_정기)),
-            (a.격차_정기||0)>0?'bad':'')+
-        kpi('실지급 연환산',dash(a.현재_실지급연봉,won),
-            (a.비정기_2026_02?'상여 등 '+man(a.비정기_2026_02)+' 포함':'비정기 없음'),
-            a.비정기_2026_02?'warn':'')+
-        kpi('누적 인상률',spct(a.누적인상률),'2024-09 → 2026-02 · 연환산 '+(a.연환산인상률===null?'-':pct(a.연환산인상률)))+
+        kpi('계약연봉 (2026)',dash(a.현재_계약연봉,won),'근로계약서 기준','lead')+
+        kpi('실제 지급연봉 (2026)',dash(a.현재_실지급연봉,won),'2026-02 지급총액 × 12 · 세전','lead')+
+        kpi('차이',a.격차===null?'-':sign(a.격차,man),a.격차율===null?'':pct(a.격차율),
+            (a.격차||0)>0?'bad':'')+
+        kpi('자료 있는 해',a.자료보유연수+' / '+a.연수+'년',
+            a.공백연수?('입사 후 '+a.공백연수+'년은 자료 없음'):'입사 이후 전 구간',
+            a.공백연수?'warn':'')+
+        kpi('누적 인상률',spct(a.누적인상률),'2024 → 2026 · 연환산 '+(a.연환산인상률===null?'-':pct(a.연환산인상률)))+
         '</div>';
       h+='<div class="panel flat" style="border-color:var(--accent);margin:0 0 12px">'+
          '<div style="font-size:12.5px">'+annGapNote(a)+'</div></div>';
-      if(a.입사전공백)
-        h+=banner('입사일이 <b>'+esc(a.입사일)+'</b>인데 가장 오래된 급여 자료가 <b>2024-09</b>입니다. '+
-          '그 사이 구간의 연봉은 원본이 없어 <b>비어 있습니다</b>. 「입사부터」는 2024-09부터 그려집니다.');
-      h+=panel('연봉 추이 — 확보된 시점','계약(파란 줄)과 실지급(노란 줄)은 성격이 다른 숫자입니다. 같은 선으로 잇지 마십시오.',
+      if(a.공백연수)
+        h+=banner('입사일이 <b>'+esc(a.입사일)+'</b>인데 급여 자료는 <b>'+
+          (a.연도별.filter(function(y){return y.상태!=='자료없음';})[0]||{}).연도+'년</b>부터 있습니다. '+
+          '그 앞 <b>'+a.공백연수+'년</b>은 원본이 없어 비어 있습니다. 회사에 그 시기 급여대장이 남아 있다면 채울 수 있습니다.');
+      h+=panel('입사 이후 연도별 연봉','입사년도부터 올해까지 한 해도 빼지 않고 놓았습니다. 자료가 없는 해는 그대로 비워 뒀습니다.',
         annTimeline(a));
-      h+=panel('세 숫자의 뜻','연봉을 하나만 말해야 한다면 <b>정기 연봉</b>을 쓰십시오.',
+      h+=panel('두 연봉의 뜻','',
         '<div class="cards">'+
-        '<div class="card"><h3>계약 연봉</h3><p>'+esc(D.annual.meta.연봉정의['계약 연봉'])+'</p></div>'+
-        '<div class="card" style="border-color:var(--accent)"><h3>정기 연봉</h3><p>'+esc(D.annual.meta.연봉정의['정기 연봉'])+'</p></div>'+
-        '<div class="card" style="border-color:var(--warn)"><h3>실지급 연환산 (세전)</h3><p>'+esc(D.annual.meta.연봉정의['실지급 연봉 (세전)'])+'</p></div>'+
-        '<div class="card"><h3>실수령액</h3><p>'+esc(D.annual.meta.연봉정의['실수령액'])+
-        '</p><p><span class="muted">2026-02 기준</span> 지급 '+won(e.지급총액)+' − 공제 '+won(e.공제총액)+
-        ' = <b>'+won(e.실지급액)+'</b></p></div>'+
+        '<div class="card"><h3>계약연봉</h3><p>'+esc(D.annual.meta.연봉정의['계약 연봉'])+'</p>'+
+        (a.계약서연봉?'<p><span class="muted">계약서 금액</span> <b>'+won(a.계약서연봉)+'</b> · 계약기간 '+
+          esc((a.계약기간||[])[0]||'-')+' ~ '+esc((a.계약기간||[])[1]||'-')+'</p>':'')+'</div>'+
+        '<div class="card"><h3>실제 지급연봉 (세전)</h3><p>'+esc(D.annual.meta.연봉정의['실지급 연봉 (세전)'])+'</p></div>'+
+        '<div class="card"><h3>통장에 들어오는 금액</h3>'+
+        '<dl class="kv">'+
+          '<dt>2026-02 지급총액</dt><dd class="metric">'+won(e.지급총액)+'</dd>'+
+          '<dt>'+(e.공제총액<0?'공제 (환급)':'공제총액')+'</dt><dd class="metric">'+
+            (e.공제총액<0?'<b class="pos">+'+won(-e.공제총액)+'</b>':'-'+won(e.공제총액))+'</dd>'+
+          '<dt><b>실수령액</b></dt><dd class="metric"><b>'+won(e.실지급액)+'</b></dd>'+
+          '<dt>연환산</dt><dd class="metric">'+man(e.실지급액*12)+'</dd>'+
+        '</dl>'+
+        (e.공제총액<0?'<p style="margin-top:8px">공제가 마이너스인 것은 <b>연말정산 환급</b>이 들어와 실수령액이 지급총액보다 큰 달이기 때문입니다. 매달 이렇지는 않습니다.</p>':'')+
+        '</div>'+
         '</div>',true);
       h+=note('※ '+esc(D.annual.meta.연환산주의)+' '+esc(D.annual.한계[2])+' '+esc(D.annual.한계[3]));
       el.innerHTML=h+'</div>';
       bindDTab();
       return;
     }
-    h+='<div class="kpi-row" style="margin:12px 0 10px">'+
+        h+='<div class="kpi-row" style="margin:12px 0 10px">'+
        kpi('지급총액',won(e.지급총액),'과세 '+won(e.과세합계),'lead')+
        kpi('공제총액',won(e.공제총액),'공제율 '+(e.지급총액?pct(e.공제총액/e.지급총액):'-'))+
        kpi('실지급액',won(e.실지급액),'')+
@@ -3947,7 +4132,7 @@
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
     {id:'v3', n:'3', t:'월별 카테고리별 지급',       g:'인건비 현황', f:v3},
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
-    {id:'v5', n:'5', t:'개인별 급여 히스토리',       g:'직원', f:v5},
+    {id:'v5', n:'5', t:'개인별 연봉 히스토리',       g:'직원', f:v5},
     {id:'vap',n:'5-1',t:'입사원서 · 이력 조회',      g:'직원', f:vAp},
     {id:'vrc',n:'5-2',t:'채용 · 면접',               g:'직원', f:vRc},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
@@ -4037,6 +4222,32 @@
         var aq=document.getElementById('anq');
         if(aq) aq.addEventListener('input',function(){ v5aQ=aq.value; renderAnn(); });
         renderAnn();
+        return;
+      }
+      if(v5Tab==='조회'){
+        document.querySelectorAll('[data-v5qy]').forEach(function(b){
+          b.addEventListener('click',function(){ v5qY=+b.getAttribute('data-v5qy'); go('v5'); });
+        });
+        var qq=document.getElementById('v5qq');
+        if(qq) qq.addEventListener('input',function(){ v5qQ=qq.value; renderAnnQ(); });
+        [['v5qco',function(v){v5qCo=v;}],['v5qjc',function(v){v5qJc=v;}],
+         ['v5qdept',function(v){v5qDept=v;}],['v5qsort',function(v){v5qSort=v;}]]
+        .forEach(function(x){
+          var el=document.getElementById(x[0]);
+          if(el) el.addEventListener('change',function(){ x[1](el.value); renderAnnQ(); });
+        });
+        [['v5qmin',function(v){v5qMin=v;}],['v5qmax',function(v){v5qMax=v;}]].forEach(function(x){
+          var el=document.getElementById(x[0]);
+          if(el) el.addEventListener('input',function(){ x[1](el.value); renderAnnQ(); });
+        });
+        var ob=document.querySelector('[data-v5qonly]');
+        if(ob) ob.addEventListener('click',function(){ v5qOnly=!v5qOnly; go('v5'); });
+        var rb=document.querySelector('[data-v5qreset]');
+        if(rb) rb.addEventListener('click',function(){
+          v5qCo='전체'; v5qJc='전체'; v5qDept='전체';
+          v5qMin=''; v5qMax=''; v5qSort='계약'; v5qQ=''; v5qOnly=false; go('v5');
+        });
+        renderAnnQ();
         return;
       }
     }
