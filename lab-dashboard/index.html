@@ -525,6 +525,235 @@
     return h;
   }
 
+
+  /* ========== 문서 색인 ========== */
+  function vIndex(){
+    var X=L.색인;
+    var h=head('문서 색인 · 목차','문서를 묶음별로 세우고 이름을 누르면 바로 열리게 만드는 자리입니다.',['part','목록 미확보']);
+    h+='<div class="kpi-row">'+
+      kpi('등록 문서','0건','드라이브를 아직 못 읽음','bad')+
+      kpi('묶음',L.분류.length+'개','A 배합 ~ G 연구')+
+      kpi('목차 칸',X.양식.length+'개','이 칸만 채우면 목차가 섭니다')+
+      kpi('만드는 법',X.방법.length+'가지','아래에서 고르십시오','lead')+
+      '</div>';
+    h+='<div class="panel flat" style="border-color:var(--warn);background:var(--warn-soft);margin-bottom:14px">'+
+      '<div style="font-size:12.8px"><b>'+esc(X.상태)+'</b> 목차는 틀만 세워 뒀습니다. '+
+      '아래 세 가지 중 하나를 해 주시면 그 자리에 문서 이름이 차고, 이름을 누르면 드라이브가 열립니다.</div></div>';
+
+    h+=panel('어떻게 만들까','1번이 가장 빠르고, 3번이 가장 오래 갑니다.',
+      '<div class="steps">'+X.방법.map(function(m){
+        return '<div class="step"'+(m.권장?' style="border-color:var(--accent)"':'')+'><div class="qn">'+m.순서+'</div><div>'+
+          '<h3>'+esc(m.방법)+' <span style="font-size:11.5px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(m.난이도)+'</span>'+
+          (m.권장?' <span class="tag plan">권장</span>':'')+'</h3>'+
+          '<p>'+esc(m.내용)+'</p></div></div>';
+      }).join('')+'</div>',true);
+
+    h+=panel('목차에 들어갈 칸','이 여덟 칸이 한 줄입니다. 「링크」가 비면 이름만 보이고 열리지는 않습니다.',
+      table([
+        {label:'칸',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+        {label:'필요',render:function(r){
+          var c={'필수':'치명','권장':'주의','조건부':'주의','선택':'참고'}[r.필수]||'참고';
+          return '<span class="sev '+c+'">'+esc(r.필수)+'</span>';}},
+        {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:48ch">'+esc(r.설명)+'</span>';}}
+      ], X.양식));
+
+    h+=panel('링크 형식','드라이브에서 「링크 복사」를 누르면 아래 형태가 나옵니다. 그대로 붙이면 됩니다.',
+      table([
+        {label:'종류',render:function(r){return '<b>'+esc(r.종류)+'</b>';}},
+        {label:'형식',render:function(r){return '<span class="num" style="font-size:11.5px">'+esc(r.형식)+'</span>';}},
+        {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:30ch">'+esc(r.설명)+'</span>';}}
+      ], X.링크형식));
+
+    h+=panel('목차 미리보기','문서가 들어오면 묶음마다 이런 모양으로 섭니다. 지금은 비어 있습니다.',
+      L.분류.map(function(c){
+        return '<div class="card" style="margin-bottom:9px;border-left:3px solid var(--'+SEC_COLOR[c.보안]+')">'+
+          '<div class="eyebrow">'+esc(c.코드)+' · 보안 '+c.보안+'급 · 보존 '+esc(c.보존)+'</div>'+
+          '<h3>'+esc(c.이름)+' <span style="font-size:11.5px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(c.영문)+'</span></h3>'+
+          '<p style="margin:4px 0 0;color:var(--ink-3)">'+
+          (c.보안===1 ? '배합비는 목차에 이름만 올리고 링크는 비웁니다. 이 방을 보는 사람 전원이 열 수 있게 되기 때문입니다.'
+                      : '문서 0건 — 드라이브 연결 후 채워집니다.')+'</p></div>';
+      }).join(''),true);
+
+    h+=panel('조심할 것','',
+      cards(X.주의.map(function(t,i){ return card(null,'<p style="margin:0">'+esc(t)+'</p>','주의 '+(i+1),'crit'); })),true);
+    return h;
+  }
+
+  /* ========== 제품 분류 ========== */
+  var vpCls='전체';
+  function won억(n){ return (n/100000000).toFixed(1)+'억'; }
+  function vProd(){
+    var P=L.제품, G=L.분류구분;
+    var tot=P.reduce(function(a,p){return a+p.매출;},0);
+    var by={}; P.forEach(function(p){ var g=by[p.분류]||(by[p.분류]={분류:p.분류,종:0,매출:0}); g.종++; g.매출+=p.매출; });
+    var gs=Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return b.매출-a.매출;});
+    var rows=P.filter(function(p){ return vpCls==='전체'||p.분류===vpCls; });
+    var cos=by['화장품']||{종:0,매출:0};
+    var h=head('제품 분류','제품마다 걸리는 법이 다릅니다. 무엇이 어느 법 아래 있는지부터 정합니다.',['fact','매출 실측']);
+    h+='<div class="kpi-row">'+
+      kpi('제품 유형',P.length+'종','매출 '+won억(tot)+'원','lead')+
+      kpi('안전확인 대상',(by['방향·탈취제(생활화학제품)'].종+by['초(생활화학제품)'].종)+'종',
+          won억(by['방향·탈취제(생활화학제품)'].매출+by['초(생활화학제품)'].매출)+'원 · 전체의 '+
+          ((by['방향·탈취제(생활화학제품)'].매출+by['초(생활화학제품)'].매출)/tot*100).toFixed(1)+'%','bad')+
+      kpi('화장품',cos.종+'종',won억(cos.매출)+'원 · 다른 법이 걸림','warn')+
+      kpi('비대상',by['일반 공산품'].종+'종',won억(by['일반 공산품'].매출)+'원 · 용기·부자재·화훼')+
+      kpi('분류 미정',by['확인 필요'].종+'종',won억(by['확인 필요'].매출)+'원 · 품목 내역 필요','warn')+
+      '</div>';
+
+    h+='<div class="panel flat" style="border-color:var(--crit);background:var(--crit-soft);margin-bottom:14px">'+
+      '<div style="font-size:12.8px"><b>화장품이 섞여 있습니다</b> — 비누 · 헤어 케어 · 핸드 케어 · 바디 케어 '+
+      cos.종+'종, 매출 '+won억(cos.매출)+'원. 이 넷은 생활화학제품이 아니라 <b>화장품법</b> 대상입니다. '+
+      '화장품책임판매업 등록과 책임판매관리자 선임이 따로 필요하고, 안전확인 신고로 갈음할 수 없습니다. '+
+      'EU에서는 화장품규정이 걸려 <b>2026-07-31 알레르겐 81종 표시</b>가 직접 적용되고, 미국은 MoCRA 시설등록, 캐나다는 화장품 신고가 각각 붙습니다.</div></div>';
+
+    h+=panel('법적 분류 다섯 갈래','',
+      table([
+        {label:'분류',cls:'strong',render:function(r){return '<b>'+esc(r.분류)+'</b>';}},
+        {label:'종',num:true,render:function(r){return (by[r.분류]||{종:0}).종+'종';}},
+        {label:'매출',num:true,cls:'strong',render:function(r){return won억((by[r.분류]||{매출:0}).매출)+'원';}},
+        {label:'비중',num:true,render:function(r){return (((by[r.분류]||{매출:0}).매출)/tot*100).toFixed(1)+'%';}},
+        {label:'심각도',render:function(r){return sev(r.심각도);}},
+        {label:'근거 법령',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:24ch">'+esc(r.법)+'</span>';}},
+        {label:'무엇이 걸리나',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:46ch">'+esc(r.요지)+'</span>';}},
+        {label:'',render:function(r){return bar((by[r.분류]||{매출:0}).매출, maxOf(gs,function(x){return x.매출;}));}}
+      ], G, null, function(r){ return 'stripe-'+r.심각도; }));
+
+    var opts=['전체'].concat(gs.map(function(g){return g.분류;}));
+    h+='<div class="searchbar">'+opts.map(function(c){
+      var n=c==='전체'?P.length:by[c].종;
+      return '<button class="co-btn'+(vpCls===c?' on':'')+'" data-vpc="'+esc(c)+'">'+esc(c)+'<span class="co-n">'+n+'</span></button>';
+    }).join('')+'</div>';
+
+    h+=panel((vpCls==='전체'?'전체':vpCls)+' '+rows.length+'종','매출 큰 순입니다. 위에서부터 손봐야 효과가 큽니다.',
+      table([
+        {label:'순위',render:function(r,i){return '<span class="rank">'+(i+1)+'</span>';}},
+        {label:'제품 유형',cls:'strong',render:function(r){return '<b>'+esc(r.유형)+'</b>';}},
+        {label:'법적 분류',render:function(r){return '<span class="sev '+r.심각도+'">'+esc(r.분류)+'</span>';}},
+        {label:'매출',num:true,cls:'strong',render:function(r){return won억(r.매출)+'원';}},
+        {label:'매출비중',num:true,render:function(r){return (r.매출비중*100).toFixed(2)+'%';}},
+        {label:'이익률',num:true,render:function(r){return (r.이익률*100).toFixed(1)+'%';}},
+        {label:'근거',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:32ch;color:var(--ink-2)">'+esc(r.근거)+'</span>';}},
+        {label:'',render:function(r){return bar(r.매출, maxOf(P,function(x){return x.매출;}));}}
+      ], rows, '540px', function(r){ return 'stripe-'+r.심각도; }));
+    h+=note('※ 매출은 매출 대시보드의 상품유형 집계(2026년)입니다. 법적 분류는 유형 이름으로 판정한 1차안이라, 품목 내역을 보면 바뀔 수 있습니다. 특히 「확인 필요」 '+by['확인 필요'].종+'종은 구성품을 봐야 정해집니다.');
+    return h;
+  }
+
+  /* ========== 제품 × 인증 매칭 ========== */
+  var vmZone='전체';
+  function vMatch(){
+    var P=L.제품, AX=L.규제축;
+    var by={}; P.forEach(function(p){ by[p.분류]=(by[p.분류]||0)+1; });
+    var zones=['전체'].concat(Array.from(new Set(AX.map(function(a){return a.지역;}))));
+    var ax=AX.filter(function(a){ return vmZone==='전체'||a.지역===vmZone; });
+    function tgt(a){ return a.적용.reduce(function(s,c){ return s+(by[c]||0); },0); }
+    var total=AX.reduce(function(s,a){ return s+tgt(a); },0);
+    var 보유=L.인증대장.보유;
+    function has(c){ return 보유.some(function(b){ return b.코드===c; }); }
+    var covered=AX.reduce(function(s,a){ return s+(has(a.코드)?tgt(a):0); },0);
+    var h=head('제품 × 인증 매칭','어느 제품에 어느 인증이 필요한지 전부 펼쳤습니다. 지금 무엇이 비었는지가 여기서 보입니다.',['part','보유 2건 · 나머지 미확인']);
+    h+='<div class="kpi-row">'+
+      kpi('점검 건수',cnt(total)+'건',P.length+'종 × '+AX.length+'개 규제','lead')+
+      kpi('보유 확인',cnt(covered)+'건',보유.length+'개 인증이 덮는 범위 · 번호는 미확보','warn')+
+      kpi('미확인',cnt(total-covered)+'건','보유 여부를 모름 · '+Math.round((total-covered)/total*100)+'%','bad')+
+      kpi('규제 항목',AX.length+'개',(zones.length-1)+'개 지역')+
+      '</div>';
+
+    h+=panel('지금까지 확인된 인증','대표이사께서 보유하고 계시다고 하신 것입니다.',
+      table([
+        {label:'인증',cls:'strong',render:function(r){return '<b>'+esc(r.인증)+'</b>';}},
+        {label:'코드',render:function(r){return '<span class="num">'+esc(r.코드)+'</span>';}},
+        {label:'대상',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:24ch">'+esc(r.대상)+'</span>';}},
+        {label:'상태',render:function(r){return '<span class="sev 참고">'+esc(r.상태)+'</span>';}},
+        {label:'번호',render:function(r){return r.번호?esc(r.번호):'<span class="sev 치명">미확보</span>';}},
+        {label:'만료일',render:function(r){return r.만료?esc(r.만료):'<span class="sev 치명">계산 불가</span>';}},
+        {label:'받아야 할 것',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:40ch;color:var(--accent)">'+esc(r.필요)+'</span>';}}
+      ], 보유, null, function(){ return 'stripe-주의'; })+
+      '<p style="margin-top:9px;font-size:12.3px;color:var(--crit)">'+esc(L.인증대장.주의)+'</p>');
+
+    h+='<div class="searchbar">'+zones.map(function(z){
+      var n=z==='전체'?AX.length:AX.filter(function(a){return a.지역===z;}).length;
+      return '<button class="co-btn'+(vmZone===z?' on':'')+'" data-vmz="'+esc(z)+'">'+esc(z)+'<span class="co-n">'+n+'</span></button>';
+    }).join('')+'</div>';
+
+    h+=panel((vmZone==='전체'?'전체':vmZone)+' 규제 '+ax.length+'개 × 대상 제품',
+      '「대상 종수」는 그 규제가 걸리는 제품 유형 수입니다. 0이면 해당 제품이 없다는 뜻입니다.',
+      table([
+        {label:'코드',render:function(r){return '<span class="num">'+esc(r.코드)+'</span>';}},
+        {label:'규제',cls:'strong',render:function(r){return '<b>'+esc(r.이름)+'</b>';}},
+        {label:'지역',render:function(r){return esc(r.지역);}},
+        {label:'심각도',render:function(r){return sev(r.심각도);}},
+        {label:'대상 종수',num:true,cls:'strong',render:function(r){return tgt(r)+'종';}},
+        {label:'대상 분류',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:38ch">'+r.적용.map(esc).join(' · ')+'</span>';}},
+        {label:'주기',render:function(r){return esc(r.주기);}},
+        {label:'보유 여부',cls:'strong',render:function(r){
+          var hit=보유.filter(function(b){return b.코드===r.코드;})[0];
+          return hit?'<span class="sev 참고">보유 (번호 미확보)</span>':'<span class="sev 치명">미확인</span>';}},
+        {label:'',render:function(r){return bar(tgt(r), maxOf(AX,tgt));}}
+      ], ax, '540px', function(r){
+        var hit=보유.filter(function(b){return b.코드===r.코드;})[0];
+        return hit?'stripe-주의':'stripe-'+r.심각도; }));
+
+    h+=panel('이 표를 채우는 법','인증 대장을 아래 칸대로 주시면, 위 표의 「미확인」이 「보유」와 만료일로 바뀝니다.',
+      table([
+        {label:'칸',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+        {label:'필요',render:function(r){
+          var c={'필수':'치명','권장':'주의','조건부':'주의','선택':'참고'}[r.필수]||'참고';
+          return '<span class="sev '+c+'">'+esc(r.필수)+'</span>';}},
+        {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:46ch">'+esc(r.설명)+'</span>';}}
+      ], L.인증대장.양식));
+    h+=note('※ 제품 유형 단위로 세었습니다. 실제 신고와 인증은 품목(SKU) 단위라 건수는 이보다 많습니다. 품목 마스터를 주시면 품목 단위로 다시 셉니다.');
+    return h;
+  }
+
+  /* ========== 품질 ========== */
+  function vQual(){
+    var Q=L.품질;
+    var h=head('품질 기준','원료가 들어와서 제품이 나갈 때까지, 어느 단계에서 무엇을 보는지입니다.',['plan','표준안']);
+    h+='<div class="kpi-row">'+
+      kpi('검사 단계',Q.기준.length+'단계','입고 ~ 보관','lead')+
+      kpi('확인된 운영','0단계','실제 검사 여부 미확인','bad')+
+      kpi('시험 종류',Q.시험.length+'종','안전기준 ~ 미생물')+
+      '</div>';
+    h+='<div class="panel flat" style="border-color:var(--warn);background:var(--warn-soft);margin-bottom:14px">'+
+      '<div style="font-size:12.8px">'+esc(Q.현황)+'</div></div>';
+    h+=panel('단계별 검사','',
+      table([
+        {label:'단계',cls:'strong',render:function(r){return '<b>'+esc(r.단계)+'</b>';}},
+        {label:'보는 것',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:32ch">'+esc(r.항목)+'</span>';}},
+        {label:'합격 기준',render:function(r){return esc(r.합부);}},
+        {label:'주기',render:function(r){return esc(r.주기);}},
+        {label:'현황',render:function(r){return '<span class="sev 주의">'+esc(r.현황)+'</span>';}},
+        {label:'왜 필요한가',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch;color:var(--ink-2)">'+esc(r.비고)+'</span>';}}
+      ], Q.기준));
+    h+=panel('부적합이 나오면','순서대로 합니다. 「재발방지」를 빼면 같은 일이 반복됩니다.',
+      '<div class="steps">'+Q.부적합.map(function(s,i){
+        return '<div class="step"><div class="qn">'+String(i+1).padStart(2,'0')+'</div><div>'+
+          '<h3>'+esc(s.단계)+'</h3><p>'+esc(s.할일)+'</p></div></div>';
+      }).join('')+'</div>',true);
+    return h;
+  }
+
+  function vTest(){
+    var Q=L.품질;
+    var h=head('시험 · 분석 대장','어떤 시험을 왜 하는지, 결과를 얼마나 보관해야 하는지입니다.',['fact','법정 기준']);
+    h+='<div class="kpi-row">'+
+      kpi('시험 종류',Q.시험.length+'종','', 'lead')+
+      kpi('보존 최장','단종 후 10년','안정성 시험')+
+      kpi('가장 짧은 주기','3년','안전기준 적합시험')+
+      '</div>';
+    h+=panel('시험 목록','성적서에는 시험기관·시험일·시료 로트를 반드시 함께 남깁니다. 셋 중 하나라도 없으면 갱신 때 다시 써야 합니다.',
+      table([
+        {label:'시험',cls:'strong',render:function(r){return '<b>'+esc(r.구분)+'</b>';}},
+        {label:'무엇에 쓰나',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:34ch">'+esc(r.목적)+'</span>';}},
+        {label:'어디서',render:function(r){return esc(r.기관);}},
+        {label:'주기',render:function(r){return esc(r.주기);}},
+        {label:'보존',cls:'strong',render:function(r){return esc(r.보존);}}
+      ], Q.시험));
+    h+=note('※ 시험성적서는 문서 분류 D에 들어갑니다. 제품코드와 연결해 두면 인증 갱신 때 찾는 시간이 사라집니다.');
+    return h;
+  }
+
   /* ========== 9~11. 과제 ========== */
   function taskView(key, title, sub){
     var arr=L.과제[key];
@@ -572,11 +801,16 @@
     {id:'v1',  g:'연구소 운영', t:'연구소 요약',        f:v1},
     {id:'v2',  g:'연구소 운영', t:'문서 체계 · 분류 표준', f:v2},
     {id:'v3',  g:'연구소 운영', t:'보안 등급 · 공유 기준', f:v3},
+    {id:'vix', g:'연구소 운영', t:'문서 색인 · 목차',     f:vIndex},
+    {id:'vpd', g:'규제 · 인증', t:'제품 분류',           f:vProd},
     {id:'v4',  g:'규제 · 인증', t:'국가별 규제 지도',     f:v4},
+    {id:'vmt', g:'규제 · 인증', t:'제품 × 인증 매칭',     f:vMatch},
     {id:'v5',  g:'규제 · 인증', t:'임박 기한',           f:v5},
     {id:'v6',  g:'규제 · 인증', t:'적합성 점검',          f:v6},
-    {id:'v7',  g:'품질 · 문서', t:'SDS 관리',            f:v7},
-    {id:'v8',  g:'품질 · 문서', t:'과거 문서 DB화',       f:v8},
+    {id:'vql', g:'품질',       t:'품질 기준',            f:vQual},
+    {id:'vts', g:'품질',       t:'시험 · 분석 대장',      f:vTest},
+    {id:'v7',  g:'문서',       t:'SDS 관리',            f:v7},
+    {id:'v8',  g:'문서',       t:'과거 문서 DB화',       f:v8},
     {id:'v9',  g:'과제',       t:'연구 과제',            f:v9},
     {id:'v10', g:'과제',       t:'품질 과제',            f:v10},
     {id:'v11', g:'과제',       t:'문서관리 과제',         f:v11},
@@ -607,6 +841,12 @@
     });
     if(id==='v6') document.querySelectorAll('[data-v6a]').forEach(function(b){
       b.addEventListener('click',function(){ v6Area=b.getAttribute('data-v6a'); go('v6'); });
+    });
+    if(id==='vpd') document.querySelectorAll('[data-vpc]').forEach(function(b){
+      b.addEventListener('click',function(){ vpCls=b.getAttribute('data-vpc'); go('vpd'); });
+    });
+    if(id==='vmt') document.querySelectorAll('[data-vmz]').forEach(function(b){
+      b.addEventListener('click',function(){ vmZone=b.getAttribute('data-vmz'); go('vmt'); });
     });
   }
   buildNav(); go('v1');
