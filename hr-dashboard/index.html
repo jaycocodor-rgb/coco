@@ -193,6 +193,29 @@
 <script>
 (function(){
   "use strict";
+
+  /* 자료 파일(data.js)이 안 읽히면 예전에는 화면이 통째로 백지였다.
+     이제는 무슨 일인지 보여 주고 다시 받아 본다. */
+  function fatal(title, detail, retry){
+    var el=document.getElementById('content');
+    if(!el) return;
+    var nav=document.getElementById('nav'); if(nav) nav.innerHTML='';
+    el.innerHTML='<div class="panel flat" style="border-color:var(--crit);max-width:60ch;margin:24px auto">'+
+      '<div class="panel-head"><h2>'+title+'</h2></div>'+
+      '<p style="font-size:13px;color:var(--ink-2);margin:0 0 10px">'+detail+'</p>'+
+      (retry?'<button id="reloadBtn" class="co-btn" style="font-size:13px;padding:8px 16px">다시 불러오기</button>':'')+
+      '</div>';
+    var rb=document.getElementById('reloadBtn');
+    if(rb) rb.addEventListener('click',function(){ location.reload(); });
+  }
+
+  if(!window.HR_DATA){
+    fatal('자료를 불러오지 못했습니다',
+      '화면 틀은 떴지만 인사 자료 파일(data.js, 약 1.6MB)이 도착하지 않았습니다. '+
+      '네트워크가 느리거나 끊겼을 때 생깁니다. 아래 단추를 누르거나 새로고침해 주십시오. '+
+      '여러 번 해도 같으면 알려 주십시오 — 자료 파일을 쪼개 놓겠습니다.', true);
+    return;
+  }
   var D = window.HR_DATA;
 
   function won(n){ if(n===null||n===undefined||isNaN(n)) return '-';
@@ -3417,7 +3440,7 @@
     var el=document.getElementById('rvCard'); if(!el) return;
     var R=D.rv360, r=(R.사람.filter(function(x){return x.직원번호===vrp.sel;})[0]);
     if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 사람을 선택하세요.</div></div>'; return; }
-    var W={}; R.가중치.forEach(function(w){ W[w.주체]=w.가중치; });
+    var WGT={'자기':0.1,'동료':0.3,'하향':0.4,'상향':0.2};
     var 문항=R.공통문항.map(function(q){ return {세트:'공통', 항목:q.항목, 내용:q.내용}; })
       .concat((R.직군문항[r.직군세부]||[]).map(function(q){ return {세트:r.직군세부, 항목:q.항목, 내용:q.내용}; }))
       .concat(r.관리자?R.관리자문항.map(function(q){ return {세트:'관리자', 항목:q.항목, 내용:q.내용}; }):[]);
@@ -3465,8 +3488,7 @@
           var c={'자기':'참고','동료':'참고','하향':'주의','상향':'치명'}[a.구분]||'참고';
           return '<span class="sev '+c+'">'+esc(a.구분)+'</span>';}},
         {label:'성명',cls:'strong',render:function(a){return '<b>'+esc(a.성명)+'</b>';}},
-        {label:'직책',render:function(a){return (a.직책&&a.직책!=='님')?esc(a.직책):'<span class="muted">-</span>';}},
-        {label:'가중치',num:true,render:function(a){return pct(a.가중치,0);}},
+        {label:'가중치',num:true,render:function(a){return pct(WGT[a.구분]||0,0);}},
         {label:'점수',num:true,render:function(){return '<span class="muted">미실시</span>';}}
       ], r.받는평가));
 
@@ -4664,6 +4686,11 @@
       renderIssues();
     }
   }
-  applyFilter(); buildNav(); go('v0');
+  try{ applyFilter(); buildNav(); go('v0'); }
+  catch(err){
+    fatal('화면을 그리지 못했습니다',
+      '자료는 받았는데 그리는 중에 멈췄습니다. 오류 내용 — '+esc(err.message)+
+      ' 이 내용을 그대로 알려 주시면 바로 고치겠습니다.', true);
+  }
 })();
 </script>
