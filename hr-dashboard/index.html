@@ -164,6 +164,13 @@
   .spark i{flex:1;background:var(--accent-2);border-radius:1px 1px 0 0;min-height:1px;}
   .spark i.hi{background:var(--crit);}
 
+  /* 목록+상세 두 칼럼 — 좁아지면 한 칼럼으로 내려앉는다 */
+  .pick{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:13px;}
+  @media (max-width:760px){
+    .pick{grid-template-columns:minmax(0,1fr);}
+    .pick .person-list{max-height:260px;}
+  }
+
   @media (max-width:900px){
     body{grid-template-columns:1fr;}
     #sidebar{position:relative;height:auto;max-height:none;border-right:none;border-bottom:1px solid var(--border);}
@@ -239,6 +246,9 @@
   function panel(title,note,body,flat){ return '<div class="panel'+(flat?' flat':'')+'"><div class="panel-head"><h2>'+title+'</h2>'+
     (note?'<div class="panel-note">'+note+'</div>':'')+'</div>'+body+'</div>'; }
   function note(t){ return '<div class="foot-note">'+t+'</div>'; }
+  function cards(a){ return '<div class="cards">'+a.join('')+'</div>'; }
+  function card(t,b,e,c){ return '<div class="card"'+(c?' style="border-color:var(--'+c+')"':'')+'>'+
+    (e?'<div class="eyebrow">'+esc(e)+'</div>':'')+(t?'<h3>'+esc(t)+'</h3>':'')+b+'</div>'; }
   function maxOf(arr,f){ return Math.max.apply(null,arr.map(f).concat([0])); }
 
   /* ================= 회사별 필터 ================= */
@@ -256,7 +266,7 @@
   /* 이 메뉴가 현재 필터를 지원하는지 */
   function scopeOf(id){
     var KR_ONLY={v1:1,vjc:1,vpay:1,v4:1,v5:1,v6:1,v7:1,v8:1,v9:1,vfor:1,v12:1};
-    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1,vrc:1,vdl:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
+    var MASTER={vhm:1,vcal:1,vrv:1,vlv:1,vap:1,vrc:1,vdl:1,vrp:1};  /* 인사마스터는 급여대장이 아니라 인사시스템 기준 */
     if(MASTER[id]) return 'all';
     var TW_ONLY={v2:1};
     var GLOBAL={v0:1,v3:1,v10:1,v11:1,v13:1,v13b:1,v14:1,v15:1,v16:1,v17:1,v18:1};
@@ -939,7 +949,7 @@
     if(v5Tab==='개인'){
       h+=deptPicker();
       h+='<div class="searchbar"><input id="pQ" type="search" placeholder="직원 이름 또는 사번 검색" value="'+esc(v5Q)+'"></div>';
-      h+='<div style="display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:13px" id="pGrid">'+
+      h+='<div class="pick" id="pGrid">'+
          '<div><div id="pLab" class="foot-note" style="padding:0 2px 6px"></div>'+
          '<div class="person-list" id="pList"></div></div><div id="pDetail"></div></div>';
       h+=note('※ '+esc(m.비고)+' '+esc(D.personYearMeta.휴가));
@@ -2570,7 +2580,7 @@
 
     if(vapTab==='조회'){
       h+='<div class="searchbar"><input id="apq" type="search" placeholder="이름·부서·학교·전공 검색" value="'+esc(vapQ)+'"></div>';
-      h+='<div style="display:grid;grid-template-columns:minmax(0,290px) minmax(0,1fr);gap:13px">'+
+      h+='<div class="pick">'+
          '<div class="person-list" id="apList"></div><div id="apCard"></div></div>';
       h+=note('※ '+esc(P.코드주의));
     }
@@ -3311,6 +3321,175 @@
     return h;
   }
   function CRIT_C(){ return 1; }
+
+
+  /* ================= 6-2. 다면평가 개인별 조회 ================= */
+  var vrp={범위:'전체', 부서:'전체', 정렬:'부서', q:'', sel:null};
+  function rvRows(){
+    var R=D.rv360; if(!R) return [];
+    var list=noP(FL(R.사람)).slice();
+    if(vrp.범위!=='전체'){
+      var m=R.관리자.filter(function(x){return String(x.직원번호)===String(vrp.범위);})[0];
+      if(m) list=list.filter(function(r){ return r.소속===m.소속; });
+    }
+    if(vrp.부서!=='전체') list=list.filter(function(r){ return r.소속===vrp.부서; });
+    var q=vrp.q.trim().toLowerCase();
+    if(q) list=list.filter(function(r){
+      return (r.성명+' '+r.소속+' '+(r.직원번호||'')+' '+(r.직책||'')).toLowerCase().indexOf(q)>=0; });
+    var S={
+      '부서':  function(a,b){ return a.소속<b.소속?-1:a.소속>b.소속?1:(b.계약연봉||0)-(a.계약연봉||0); },
+      '입사':  function(a,b){ return (a.입사일||'9999')<(b.입사일||'9999')?-1:1; },
+      '입사역': function(a,b){ return (a.입사일||'')>(b.입사일||'')?-1:1; },
+      '연봉':  function(a,b){ return (b.계약연봉||0)-(a.계약연봉||0); },
+      '연봉역': function(a,b){ return (a.계약연봉||0)-(b.계약연봉||0); },
+      '이름':  function(a,b){ return a.성명<b.성명?-1:1; }
+    };
+    list.sort(S[vrp.정렬]||S['부서']);
+    return list;
+  }
+  function vRvP(){
+    var R=D.rv360;
+    if(!R) return head('6-2. 다면평가 개인별 조회','자료가 아직 없습니다.',['part','미연결']);
+    var G=R.집계, rows=rvRows();
+    var h=head('6-2. 다면평가 개인별 조회',
+      '사람마다 누가 평가하고 누구를 평가하는지입니다. '+esc(R.상태),['part','배정표 · 점수 없음']);
+    h+='<div class="kpi-row">'+
+      kpi('평가 대상',cnt(G.대상)+'명','부서 '+G.부서+'개 · 관리자 '+G.관리자+'명','lead')+
+      kpi('총 응답 건수',cnt(G.총응답건)+'건','1인당 '+G['1인평균']+'건 작성')+
+      kpi('완료',G.완료+'건','평가를 실시한 적이 없습니다','bad')+
+      kpi('관리자 공석',G.관리자공석부서+'개 부서','하향·상향이 모두 빠짐','bad')+
+      kpi('상향 미실시',G.상향미실시+'명','부서원 '+G.상향최소+'명 미만 — 익명성 보호','warn')+
+      kpi('응답 구성','동료 '+G.동료,'자기 '+G.자기+' · 하향 '+G.하향+' · 상향 '+G.상향)+
+      '</div>';
+
+    /* 열람 범위 — 중간관리자는 자기 부서만 */
+    h+='<div class="searchbar"><span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-right:4px">열람 범위</span>'+
+      '<button class="co-btn'+(vrp.범위==='전체'?' on':'')+'" data-rvs="전체">전체 <span class="co-n">인사·대표</span></button>'+
+      noP(FL(R.관리자)).map(function(m){
+        return '<button class="co-btn'+(String(vrp.범위)===String(m.직원번호)?' on':'')+'" data-rvs="'+esc(m.직원번호)+'">'+
+          esc(m.성명)+' <span class="co-n">'+esc(m.소속)+' '+m.부서원수+'</span></button>';
+      }).join('')+'</div>';
+    if(vrp.범위!=='전체'){
+      var mm=R.관리자.filter(function(x){return String(x.직원번호)===String(vrp.범위);})[0]||{};
+      h+='<div class="panel flat" style="border-color:var(--accent);background:var(--accent-soft);margin-bottom:11px">'+
+        '<div style="font-size:12.5px"><b>'+esc(mm.성명)+' 님 화면</b> — '+esc(mm.소속)+' 소속 인원만 보입니다. '+
+        '중간관리자는 자기 부서만 열람합니다. 다른 부서를 보려면 「전체」로 돌리십시오.</div></div>';
+    }
+
+    var depts=Array.from(new Set(noP(FL(R.사람)).map(function(r){return r.소속;}))).sort();
+    h+='<div class="searchbar">'+
+      '<input id="rvq" type="search" placeholder="이름 · 사번 · 직책 검색" value="'+esc(vrp.q)+'">'+
+      '<select id="rvd"><option value="전체">부서 전체</option>'+depts.map(function(x){
+        return '<option value="'+esc(x)+'"'+(vrp.부서===x?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>'+
+      '<select id="rvo">'+[['부서','부서순'],['입사','입사 빠른 순'],['입사역','입사 늦은 순'],
+        ['연봉','연봉 많은 순'],['연봉역','연봉 적은 순'],['이름','이름순']].map(function(o){
+        return '<option value="'+o[0]+'"'+(vrp.정렬===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+      '</div>';
+    h+='<div class="foot-note" style="padding:0 2px 6px">'+rows.length+'명 · '+
+      ({'부서':'부서순','입사':'입사 빠른 순','입사역':'입사 늦은 순','연봉':'연봉 많은 순','연봉역':'연봉 적은 순','이름':'이름순'}[vrp.정렬])+'</div>';
+    h+='<div class="pick"><div class="person-list" id="rvList"></div><div id="rvCard"></div></div>';
+    h+=panel('배정 규칙','',cards(R.규칙.map(function(t,i){
+      return card(null,'<p style="margin:0">'+esc(t)+'</p>','규칙 '+(i+1)); })),true);
+    h+=note('※ '+R.한계.map(esc).join(' '));
+    h+=hideNote();
+    return h;
+  }
+  function renderRvList(){
+    var el=document.getElementById('rvList'); if(!el) return;
+    var rows=rvRows();
+    if(!rows.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">조건에 맞는 사람이 없습니다.</div>'; vrp.sel=null; }
+    else{
+      if(!vrp.sel || !rows.some(function(r){return r.직원번호===vrp.sel;})) vrp.sel=rows[0].직원번호;
+      el.innerHTML=rows.map(function(r){
+        return '<button class="person-row" aria-selected="'+(r.직원번호===vrp.sel?'true':'false')+'" data-rvp="'+esc(r.직원번호)+'">'+
+          '<span><b>'+esc(r.성명)+'</b>'+(r.관리자?' <span class="sev 참고">'+esc(r.직책)+'</span>':'')+
+          '<br><span class="sub">'+esc(r.소속)+' · '+esc((r.입사일||'').slice(0,7))+'</span></span>'+
+          '<span class="num" style="font-size:11px;text-align:right">'+(r.계약연봉?man(r.계약연봉):'<span class="sub">-</span>')+
+          '<br><span class="sub">'+r.받는건수+'건</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-rvp]').forEach(function(b){
+        b.addEventListener('click',function(){ vrp.sel=b.getAttribute('data-rvp'); renderRvList(); });
+      });
+    }
+    renderRvCard();
+  }
+  function renderRvCard(){
+    var el=document.getElementById('rvCard'); if(!el) return;
+    var R=D.rv360, r=(R.사람.filter(function(x){return x.직원번호===vrp.sel;})[0]);
+    if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 사람을 선택하세요.</div></div>'; return; }
+    var W={}; R.가중치.forEach(function(w){ W[w.주체]=w.가중치; });
+    var 문항=R.공통문항.map(function(q){ return {세트:'공통', 항목:q.항목, 내용:q.내용}; })
+      .concat((R.직군문항[r.직군세부]||[]).map(function(q){ return {세트:r.직군세부, 항목:q.항목, 내용:q.내용}; }))
+      .concat(r.관리자?R.관리자문항.map(function(q){ return {세트:'관리자', 항목:q.항목, 내용:q.내용}; }):[]);
+    var 받는구성={}; r.받는평가.forEach(function(a){ 받는구성[a.구분]=(받는구성[a.구분]||0)+1; });
+
+    var h='<div class="panel flat"><div class="panel-head"><h2>'+esc(r.성명)+
+      ' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(r.직원번호)+'</span>'+
+      (r.관리자?' <span class="sev 참고">'+esc(r.직책)+'</span>':'')+'</h2>'+
+      '<div class="panel-note">'+esc(r.소속)+' · '+esc(r.직군세부)+' · '+esc(r.사업장||'-')+'</div></div>';
+    h+='<div class="kpi-row" style="margin-bottom:11px">'+
+      kpi('받는 평가',r.받는건수+'건','나를 평가하는 사람','lead')+
+      kpi('주는 평가',r.주는건수+'건','내가 평가할 사람')+
+      kpi('문항',문항.length+'개','공통 '+R.공통문항.length+' + 직군 '+(R.직군문항[r.직군세부]||[]).length+
+          (r.관리자?' + 관리자 '+R.관리자문항.length:''))+
+      kpi('상태','미실시','평가를 연 적이 없습니다','bad')+
+      '</div>';
+    h+='<div class="cards" style="margin-bottom:11px">'+
+      '<div class="card"><h3>기본</h3><dl class="kv">'+
+        '<dt>법인</dt><dd>'+esc(r.법인)+'</dd>'+
+        '<dt>직위</dt><dd>'+(r.직위?esc(r.직위):'<span class="muted">미기재</span>')+'</dd>'+
+        '<dt>입사일</dt><dd>'+esc(r.입사일||'-')+'</dd>'+
+        '<dt>근속</dt><dd>'+(r.근속년수?r.근속년수+'년':'-')+'</dd>'+
+        '<dt>계약연봉</dt><dd>'+(r.계약연봉?won(r.계약연봉):'<span class="muted">자료 없음</span>')+'</dd>'+
+        '<dt>등급</dt><dd>'+gradeChip(r.등급)+' <span class="muted">인상률 구간 — 평가 결과 아님</span></dd>'+
+      '</dl></div>'+
+      '<div class="card"><h3>부서</h3><dl class="kv">'+
+        '<dt>부서 인원</dt><dd>'+r.부서인원+'명</dd>'+
+        '<dt>관리자</dt><dd>'+(r.부서관리자수?r.부서관리자수+'명':'<span class="sev 치명">공석</span>')+'</dd>'+
+        '<dt>부서원</dt><dd>'+r.부서원수+'명</dd>'+
+      '</dl>'+
+      (r.관리자공석?'<p style="margin-top:7px;font-size:11.8px;color:var(--crit)">직책 보유자가 없어 하향·상향평가를 주고받을 상대가 없습니다.</p>':'')+
+      (r.상향미실시?'<p style="margin-top:7px;font-size:11.8px;color:var(--warn)">부서원이 '+R.집계.상향최소+'명 미만이라 상향평가를 받지 않습니다. 누가 썼는지 드러나기 때문입니다.</p>':'')+
+      '</div>'+
+      '<div class="card"><h3>받는 평가 구성</h3>'+
+        table([{label:'구분',render:function(x){return '<b>'+esc(x.k)+'</b>';}},
+               {label:'건수',num:true,render:function(x){return x.v+'건';}},
+               {label:'가중치',num:true,cls:'strong',render:function(x){return pct(x.w,0);}}],
+          [{k:'자기',v:받는구성['자기']||0,w:0.1},{k:'동료',v:받는구성['동료']||0,w:0.3},
+           {k:'하향',v:받는구성['하향']||0,w:0.4},{k:'상향',v:받는구성['상향']||0,w:0.2}])+
+      '</div></div>';
+
+    h+=panel('나를 평가하는 사람 ('+r.받는건수+'명)','가중치는 최종 점수에 반영되는 비중입니다.',
+      table([
+        {label:'구분',render:function(a){
+          var c={'자기':'참고','동료':'참고','하향':'주의','상향':'치명'}[a.구분]||'참고';
+          return '<span class="sev '+c+'">'+esc(a.구분)+'</span>';}},
+        {label:'성명',cls:'strong',render:function(a){return '<b>'+esc(a.성명)+'</b>';}},
+        {label:'직책',render:function(a){return (a.직책&&a.직책!=='님')?esc(a.직책):'<span class="muted">-</span>';}},
+        {label:'가중치',num:true,render:function(a){return pct(a.가중치,0);}},
+        {label:'점수',num:true,render:function(){return '<span class="muted">미실시</span>';}}
+      ], r.받는평가));
+
+    h+=panel('내가 평가할 사람 ('+r.주는건수+'명)','이 사람이 작성해야 할 평가지입니다.',
+      table([
+        {label:'구분',render:function(a){
+          var c={'자기':'참고','동료':'참고','하향':'주의','상향':'치명'}[a.구분]||'참고';
+          return '<span class="sev '+c+'">'+esc(a.구분)+'</span>';}},
+        {label:'성명',cls:'strong',render:function(a){return '<b>'+esc(a.성명)+'</b>';}},
+        {label:'제출',render:function(){return '<span class="muted">미제출</span>';}}
+      ], r.주는평가));
+
+    h+=panel('이 사람에게 쓰는 문항 ('+문항.length+'개)','5점 척도입니다. 점수마다 말로 된 기준이 붙습니다.',
+      table([
+        {label:'세트',render:function(q){
+          var c=q.세트==='공통'?'참고':(q.세트==='관리자'?'치명':'주의');
+          return '<span class="sev '+c+'">'+esc(q.세트)+'</span>';}},
+        {label:'항목',cls:'strong',render:function(q){return '<b>'+esc(q.항목)+'</b>';}},
+        {label:'문항',render:function(q){return '<span style="white-space:normal;display:inline-block;min-width:40ch">'+esc(q.내용)+'</span>';}}
+      ], 문항));
+    h+='</div>';
+    el.innerHTML=h;
+  }
 
   /* ================= 10. 복리후생비 ================= */
   function v10(){
@@ -4069,6 +4248,126 @@
     return h;
   }
 
+
+  /* ================= 19. 세금 · 4대보험 납부 현황 ================= */
+  var vtxTab='원천세';
+  function vTax(){
+    var T=D.taxDesk;
+    if(!T) return head('19. 세금 · 4대보험 납부','자료가 아직 없습니다.',['part','미연결']);
+    var W=T.원천세, S=W.합계, B=T.사대보험;
+    var h=head('19. 세금 · 4대보험 납부 현황',
+      '회사에서 나간 세금과 보험료입니다. 원천세는 '+S.월수+'개월 실측이고, 나머지는 자료를 더 받아야 합니다.',
+      ['part','원천세만 실측']);
+    h+='<div class="kpi-row">'+
+      kpi('원천세 납부',eok(S.납부액),S.월수+'개월 · '+S.법인수+'개 법인','lead')+
+      kpi('월평균',man(S.납부액/S.월수),'연말정산 환급월 포함')+
+      kpi('지급액 합계',eok(S.지급액),'원천징수 대상 소득')+
+      kpi('4대보험 월',man(B.합계.계),'근로자 '+man(B.합계.근로자)+' + 회사 '+man(B.합계.회사),'warn')+
+      kpi('4대보험 연환산',eok(B.합계.계*12),'한 달 ×12 — 추정','warn')+
+      kpi('미확보 항목',T.미확보.length+'건','퇴직금·법인세·공과금','bad')+
+      '</div>';
+    var TB=[['원천세','① 원천세 · 근로소득세'],['법인','② 법인별'],['보험','③ 4대보험'],['미확보','④ 아직 없는 것']];
+    h+='<div class="searchbar">'+TB.map(function(t){
+      return '<button class="nav-item'+(vtxTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vtx="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vtxTab==='원천세'){
+      var mx=maxOf(W.월별,function(x){return Math.abs(x.납부액);});
+      h+=panel('월별 납부 ('+S.월수+'개월)',
+        '파일 이름의 달에 실제로 신고·납부한 금액입니다. 지방소득세까지 포함한 실납부액입니다.',
+        table([
+          {label:'월',cls:'strong',render:function(r){return '<b class="num">'+esc(r.월)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+          {label:'지급액',num:true,render:function(r){return won(r.지급액);}},
+          {label:'소득세',num:true,render:function(r){return r.소득세<0?'<b class="neg">'+won(r.소득세)+'</b>':won(r.소득세);}},
+          {label:'지방소득세',num:true,render:function(r){return won(r.지방소득세);}},
+          {label:'납부액',num:true,cls:'strong',render:function(r){
+            return r.납부액<0?'<b class="neg">'+won(r.납부액)+'</b>':'<b>'+won(r.납부액)+'</b>';}},
+          {label:'법인',num:true,render:function(r){return r.법인수+'개';}},
+          {label:'',render:function(r){return bar(r.납부액,mx);}}
+        ], W.월별, null, function(r){ return r.납부액<0?'stripe-주의':''; }));
+      h+='<div class="panel flat" style="border-color:var(--warn);background:var(--warn-soft);margin-bottom:12px">'+
+        '<div style="font-size:12.5px"><b>2026년 2월이 마이너스인 이유</b> — 연말정산 환급월입니다. '+
+        '지급액이 57.7억으로 평월의 8배인 것도 연말정산 정산분이 얹혔기 때문입니다. '+
+        '그 달만 떼어 보면 회사가 '+man(Math.abs(W.월별.filter(function(x){return x.납부액<0;})[0].납부액))+'을 돌려받았습니다.</div></div>';
+      h+=panel('소득 종류별','가감계 행만 모은 값이라 월별 총계와는 기준이 다릅니다.',
+        table([
+          {label:'소득구분',cls:'strong',render:function(r){return '<b>'+esc(r.소득구분)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return cnt(r.인원)+'명';}},
+          {label:'지급액',num:true,render:function(r){return won(r.지급액);}},
+          {label:'납부액',num:true,cls:'strong',render:function(r){return won(r.납부액);}},
+          {label:'',render:function(r){return bar(r.지급액,maxOf(W.소득구분별,function(x){return x.지급액;}));}}
+        ], W.소득구분별));
+    }
+
+    if(vtxTab==='법인'){
+      h+=panel('법인별 '+S.월수+'개월 합계','그룹 7개 법인 중 신고 실적이 있는 곳입니다.',
+        table([
+          {label:'법인',cls:'strong',render:function(r){return '<b>'+esc(r.법인)+'</b>';}},
+          {label:'신고 월수',num:true,render:function(r){return r.신고월수+'개월';}},
+          {label:'최대 인원',num:true,render:function(r){return cnt(r.인원최대)+'명';}},
+          {label:'지급액',num:true,render:function(r){return won(r.지급액);}},
+          {label:'소득세',num:true,render:function(r){return won(r.소득세);}},
+          {label:'지방소득세',num:true,render:function(r){return won(r.지방소득세);}},
+          {label:'납부액',num:true,cls:'strong',render:function(r){return won(r.납부액);}},
+          {label:'지급액 대비',num:true,render:function(r){
+            if(!r.지급액) return '<span class="muted">-</span>';
+            var v=r.납부액/r.지급액;
+            return '<b class="'+(v>0.3?'neg':'')+'">'+pct(v)+'</b>';}},
+          {label:'',render:function(r){return bar(r.납부액,maxOf(W.법인별,function(x){return x.납부액;}));}}
+        ], W.법인별, null, function(r){ return (r.지급액&&r.납부액/r.지급액>0.3)?'stripe-주의':''; }));
+      h+='<div class="panel flat" style="border-color:var(--warn);background:var(--warn-soft)">'+
+        '<div style="font-size:12.5px"><b>지급액 대비 납부액이 30%를 넘는 법인은 확인이 필요합니다</b> — '+
+        '급여 원천징수만으로는 이 비율이 나오지 않습니다. 이자·배당 같은 법인원천이 총계에 섞여 있을 가능성이 큽니다. '+
+        '옵티머와 더프로방스가 여기 해당합니다. 재무파트에 어떤 소득의 원천징수인지 확인해야 합니다.</div></div>';
+    }
+
+    if(vtxTab==='보험'){
+      h+=panel('4대보험 한 달 ('+D.asOf+')',esc(B.기준),
+        table([
+          {label:'항목',cls:'strong',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'근로자 부담',num:true,render:function(r){return won(r.근로자);}},
+          {label:'회사 부담',num:true,render:function(r){return won(r.회사);}},
+          {label:'합계',num:true,cls:'strong',render:function(r){return won(r.계);}},
+          {label:'근거',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:38ch;color:var(--ink-2)">'+esc(r.근거)+'</span>';}},
+          {label:'',render:function(r){return bar(r.계,maxOf(B.항목,function(x){return x.계;}));}}
+        ], B.항목.concat([{항목:'합계',근로자:B.합계.근로자,회사:B.합계.회사,계:B.합계.계,근거:'산재보험 제외',_t:1}]),
+          null, function(r){ return r._t?'total-row':''; }));
+      h+='<div class="kpi-row">'+
+        kpi('월 합계',man(B.합계.계),'근로자 '+pct(B.합계.근로자/B.합계.계)+' · 회사 '+pct(B.합계.회사/B.합계.계),'lead')+
+        kpi('연환산',eok(B.합계.계*12),'한 달 ×12 — 추정','warn')+
+        kpi('과세 급여 대비',pct(B.합계.계/B.과세합계),'과세합계 '+man(B.과세합계))+
+        kpi('산재보험','미확인','요율·납부액 미확보 — 회사 전액 부담','bad')+
+        '</div>';
+      h+=panel('이 숫자를 읽을 때','',
+        cards(B.한계.map(function(t,i){ return card(null,'<p style="margin:0">'+esc(t)+'</p>','주의 '+(i+1),'warn'); })),true);
+    }
+
+    if(vtxTab==='미확보'){
+      h+=panel('아직 채우지 못한 것','위에서부터 받으면 그만큼 화면이 찹니다.',
+        table([
+          {label:'순위',render:function(r){return '<span class="rank">'+r.우선+'</span>';}},
+          {label:'항목',cls:'strong',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+          {label:'상태',render:function(r){
+            var c=r.상태==='미확보'?'치명':(r.상태==='구자료만'?'주의':'참고');
+            return '<span class="sev '+c+'">'+esc(r.상태)+'</span>';}},
+          {label:'어디에',render:function(r){return esc(r.소스);}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.설명)+'</span>';}}
+        ], T.미확보, null, function(r){ return r.상태==='미확보'?'stripe-치명':'stripe-주의'; }));
+      h+=panel('원천세 자료를 읽을 때 주의한 것','',
+        cards(W.주의.map(function(t,i){ return card(null,'<p style="margin:0">'+esc(t)+'</p>','주의 '+(i+1)); })),true);
+      if(W.제외시트 && W.제외시트.length)
+        h+=panel('뺀 시트 '+W.제외시트.length+'개',
+          '시트 이름의 지급월이 파일의 달과 달라 갱신되지 않은 과거 시트로 봤습니다. 넣으면 같은 금액이 여러 달에 중복으로 더해집니다.',
+          table([
+            {label:'파일',render:function(r){return '<span class="num">'+esc(r.파일)+'</span>';}},
+            {label:'시트',render:function(r){return esc(r.시트);}}
+          ], W.제외시트, '240px'));
+    }
+    h+=note('※ 출처 — '+esc(W.출처)+' · '+esc(W.기준)+'. '+T.한계.slice(-1)[0]);
+    return h;
+  }
+
   /* ================= 부록 ================= */
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
@@ -4137,6 +4436,7 @@
     {id:'vrc',n:'5-2',t:'채용 · 면접',               g:'직원', f:vRc},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
     {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
+    {id:'vrp',n:'6-2',t:'다면평가 개인별 조회',    g:'직원', f:vRvP},
     {id:'v7', n:'7', t:'각종 수당 · 보상',          g:'직원', f:v7},
     {id:'vpay',n:'7-1',t:'수당 상세 리스팅',         g:'직원', f:vPay},
     {id:'v8', n:'8', t:'근태 · 휴직 현황',          g:'직원', f:v8},
@@ -4155,6 +4455,7 @@
     {id:'v15',n:'16',t:'인재 육성 전략',            g:'전략 설계', f:v15},
     {id:'v16',n:'17',t:'복리후생 강화 전략',        g:'전략 설계', f:v16},
     {id:'v17',n:'18',t:'인재 확보 전략',            g:'전략 설계', f:v17},
+    {id:'vtx',n:'19',t:'세금 · 4대보험 납부',      g:'비용', f:vTax},
     {id:'v18',n:'·', t:'데이터 출처 및 한계',        g:'부록', f:v18}
   ];
   var cur='v0';
@@ -4324,6 +4625,17 @@
         b.addEventListener('click',function(){ vcalM=b.getAttribute('data-vcm'); go('vcal'); });
       });
     }
+    if(id==='vrp'){
+      document.querySelectorAll('[data-rvs]').forEach(function(b){
+        b.addEventListener('click',function(){ vrp.범위=b.getAttribute('data-rvs'); vrp.sel=null; go('vrp'); });
+      });
+      var rq=document.getElementById('rvq');
+      if(rq) rq.addEventListener('input',function(){ vrp.q=rq.value; vrp.sel=null; renderRvList(); });
+      var rd=document.getElementById('rvd'), ro=document.getElementById('rvo');
+      if(rd) rd.addEventListener('change',function(){ vrp.부서=rd.value; vrp.sel=null; go('vrp'); });
+      if(ro) ro.addEventListener('change',function(){ vrp.정렬=ro.value; go('vrp'); });
+      renderRvList();
+    }
     if(id==='vrv'){
       document.querySelectorAll('[data-vrv]').forEach(function(b){
         b.addEventListener('click',function(){ vrvTab=b.getAttribute('data-vrv'); go('vrv'); });
@@ -4342,6 +4654,9 @@
         b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
       });
     }
+    if(id==='vtx') document.querySelectorAll('[data-vtx]').forEach(function(b){
+      b.addEventListener('click',function(){ vtxTab=b.getAttribute('data-vtx'); go('vtx'); });
+    });
     if(id==='v12'){
       var s=document.getElementById('sevSel'), iq=document.getElementById('issQ');
       if(s) s.addEventListener('change',function(){ v12Sev=s.value; renderIssues(); });
