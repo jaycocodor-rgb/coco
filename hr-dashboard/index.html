@@ -4568,7 +4568,14 @@
             '야근비·외주비 집계가 '+((DG&&DG.집계.미접수근무일)||0)+'일 비어 있습니다.',
        할일:'빠진 날의 보고를 모아 넣거나, 5240에서 직접 받아 보고 의존을 끊습니다.',
        메뉴:'vdg'},
-      {n:8, 급:'참고', 사안:'다면평가를 한 번도 실시하지 않음',
+      {n:8, 급:'주의', 사안:'2026년 7~8월 두 달에 19명 퇴사',
+       근거:'-',
+       상태:'7월 12명, 8월 7명이 나갔습니다. 2026년 월 이직률 평균이 '+
+            (D.monthDesk?pct(D.monthDesk.연도.filter(function(x){return x.연도==='2026';})[0].이직률,1):'-')+'입니다. '+
+            '퇴사자 명부의 퇴직사유는 306명 중 3건만 적혀 있어 원인을 못 짚습니다.',
+       할일:'7~8월 퇴사자에게 사유를 받아 적어 두십시오. 지금은 왜 나가는지 자료로 말할 수 없습니다.',
+       메뉴:'vmn'},
+      {n:9, 급:'참고', 사안:'다면평가를 한 번도 실시하지 않음',
        근거:'-',
        상태:'배정표는 '+((RV&&RV.집계.대상)||0)+'명 '+cnt((RV&&RV.집계.총응답건)||0)+'건까지 짜여 있고 점수가 0건입니다. '+
             '관리자 공석 부서가 '+((RV&&RV.집계.관리자공석부서)||0)+'개입니다.',
@@ -4611,13 +4618,74 @@
           '이건 구글 설정이라 대표님이 직접 하셔야 합니다.</p>','대표 조치')
       ]),true);
 
+    /* ── 확인 요청 ──
+       브리핑이 「문제가 무엇인가」라면 이 표는 「누가 무엇을 확인해 줘야 내가 더 나가는가」다.
+       제가 자료로 못 메우는 칸만 올린다. 제가 할 수 있는 일은 올리지 않는다. */
+    var ASK=[
+      {no:1, 급:'치명', 받는곳:'인사 · 재무', 확인:'퇴직연금 계좌가 없는 11명의 적립액이 실제로 금융기관에 들어갔는지',
+       왜:'대장에는 매월 적립액이 잡혀 있는데 운용사 칸이 비어 있습니다. 안 들어갔으면 근퇴법 제20조 납입 의무를 넘긴 것이고 지연이자가 붙습니다.',
+       어떻게:'하나·국민·산업은행 계좌별 가입자명부를 뽑아 11명이 들어 있는지 대조해 주십시오.', 메뉴:'vsv'},
+      {no:2, 급:'치명', 받는곳:'인사', 확인:'최저임금 미달자 명단과 소급 정산 여부',
+       왜:'위반이 확정된 항목입니다. 3년 이하 징역 또는 3천만원 이하 벌금 조항이 붙어 있습니다.',
+       어떻게:'13번 화면의 해당 인원이 맞는지 확인하고, 2026년 시급 10,320원 기준으로 소급분을 계산해 주십시오.', 메뉴:'v12'},
+      {no:3, 급:'치명', 받는곳:'인사', 확인:'4대보험 공제가 없는 사람이 가입 대상인지 아닌지',
+       왜:'대상인데 미가입이면 과태료와 함께 보험료를 소급 추징당합니다. 회사 부담분이 같이 붙습니다.',
+       어떻게:'사람별로 월 60시간 미만·단기 여부를 적어 주십시오. 대상이면 바로 취득 신고가 필요합니다.', 메뉴:'v12'},
+      {no:4, 급:'치명', 받는곳:'인사', 확인:'입사서류 실물이 어디에 있는지 (종이 · 드라이브 · 라인웍스)',
+       왜:'서류 1,647건 가운데 확인된 것이 0건입니다. 있는지 없는지 자체를 모르는 상태입니다.',
+       어떻게:'보관 위치만 알려 주시면 폴더를 훑어 체크란을 자동으로 채우겠습니다. 전수가 어렵다면 외국인 30명·현장직 75명부터입니다.', 메뉴:'vap'},
+      {no:5, 급:'치명', 받는곳:'인사', 확인:'외국인 30명의 체류자격과 체류기간 만료일',
+       왜:'만료자를 계속 쓰면 사업주도 처벌됩니다. 국적이 빈 38명 중에도 외국인이 있을 수 있습니다.',
+       어떻게:'외국인등록증 기준으로 자격(E-9·H-2 등)과 만료일을 채워 주십시오.', 메뉴:'vfor'},
+      {no:6, 급:'주의', 받는곳:'대표', 확인:'기간제 2년 초과자를 전환할지 종료할지',
+       왜:'결정을 미루면 법으로 자동 전환됩니다. 그 뒤 계약 종료로 처리하면 부당해고 다툼이 됩니다.',
+       어떻게:'사람별로 전환·종료를 정해 주십시오. 제가 할 수 있는 판단이 아닙니다.', 메뉴:'v12'},
+      {no:7, 급:'주의', 받는곳:'정보시스템', 확인:'5240 근태 소급 수집 — 회사 PC에서 실행',
+       왜:'이 서버에서 api.5240.cloud 로 나가는 길이 막혀 있습니다(403). 받아 주시면 근태·연차 발생·사용·잔여가 한 번에 채워집니다.',
+       어떻게:'8-3 화면에 적어 둔 명령을 회사 PC에서 돌려 결과 파일을 올려 주십시오.', 메뉴:'vdl'},
+      {no:8, 급:'주의', 받는곳:'인사', 확인:'장애인 고용 여부 — 150명 전원 「N」이 사실인지, 입력을 안 한 것인지',
+       왜:'상시 150명이면 의무고용 5명입니다. 실제로 없는 것과 입력 누락은 전혀 다른 문제입니다.',
+       어떻게:'한 줄만 답해 주시면 됩니다. 실제로 0명인지, 아니면 칸을 채우지 않은 것인지.', 메뉴:'v12'},
+      {no:9, 급:'주의', 받는곳:'인사 · 안전', 확인:'건강진단과 법정 의무교육 실시 기록',
+       왜:'실시했는데 기록이 없는 것과 안 한 것을 가릴 수 없습니다. 향료·유기용제를 다루는 현장직은 특수건강진단 대상일 수 있습니다.',
+       어떻게:'최근 2년 실시 일자와 대상 인원을 주십시오. 작업환경측정 결과가 있으면 특수건강진단 대상도 확정됩니다.', 메뉴:'v12'},
+      {no:10,급:'주의', 받는곳:'급여', 확인:'임금명세서를 개인별로 교부했는지, 취업규칙 신고본이 있는지',
+       왜:'명세서 교부는 2021년 11월부터 의무이고, 취업규칙은 10인 이상이면 신고와 게시가 의무입니다.',
+       어떻게:'교부 방식(메일·라인웍스·종이)과 취업규칙 신고일을 알려 주십시오.', 메뉴:'v12'},
+      {no:11,급:'주의', 받는곳:'인사 (이윤정)', 확인:'일일보고가 빠진 45일분',
+       왜:'근무일 62일 중 23일만 받았습니다. 야근비·외주비 집계가 그만큼 비어 있습니다.',
+       어떻게:'빠진 날의 보고 파일을 한 번에 주시거나, 7번(5240) 연결 후에는 보고 없이도 채워집니다.', 메뉴:'vdg'},
+      {no:12,급:'주의', 받는곳:'인사', 확인:'재직자 전원의 입사일과 고용형태 1회 추출',
+       왜:'3-1 월별 인원 변동의 입사·기말이 명부보다 50명 적습니다. 퇴사자 명부는 받았는데 재직자 명부를 사람 단위로 못 받아서입니다.',
+       어떻게:'5240에서 재직자 전원의 성명·직원번호·입사일·직원구분만 뽑아 주시면 됩니다. 급여 항목은 필요 없습니다.', 메뉴:'vmn'},
+      {no:13,급:'참고', 받는곳:'재무', 확인:'2023년 퇴직연금 월납 대장 위치',
+       왜:'2024·2025·2026은 있는데 2023년만 없어 연도축에 구멍이 납니다.',
+       어떻게:'파일이 있으면 경로를, 없으면 「없다」고만 알려 주십시오. 없으면 퇴사자 계산서 14건으로 메우겠습니다.', 메뉴:'vsv'},
+      {no:14,급:'참고', 받는곳:'대표', 확인:'인사 드라이브 2단계 인증과 외부 공유 차단',
+       왜:'인사·급여 자료는 유출되면 되돌릴 수 없습니다. CEO 계정 전체를 연결하는 대신 폴더 단위 공유가 안전합니다.',
+       어떻게:'2단계 인증은 문자보다 인증 앱이나 보안키로, 외부 공유·다운로드·인쇄·복사는 차단으로 두십시오. 구글 설정이라 대표님만 할 수 있습니다.', 메뉴:'v18'}
+    ];
+    var ASKN={};
+    ASK.forEach(function(a){ ASKN[a.급]=(ASKN[a.급]||0)+1; });
+    h+=panel('확인 요청 — '+ASK.length+'건 (전부 회신 대기)',
+      '여기 있는 칸은 제가 자료로 메울 수 없는 것들입니다. 한 줄 답만 와도 해당 메뉴가 「판정 못 함」에서 빠져나옵니다. '+
+      '치명 '+(ASKN['치명']||0)+'건 · 주의 '+(ASKN['주의']||0)+'건 · 참고 '+(ASKN['참고']||0)+'건.',
+      table([
+        {label:'',cls:'strong',render:function(r){return '<b class="num">'+r.no+'</b>';}},
+        {label:'등급',render:function(r){return '<span class="sev '+r.급+'">'+r.급+'</span>';}},
+        {label:'받는 곳',cls:'strong',render:function(r){return '<b>'+esc(r.받는곳)+'</b>';}},
+        {label:'확인할 것',cls:'strong',render:function(r){return '<b>'+esc(r.확인)+'</b><br><span class="sub">'+esc(r.왜)+'</span>';}},
+        {label:'어떻게 주시면 되는지',render:function(r){return esc(r.어떻게);}},
+        {label:'상태',render:function(r){return '<span class="sev 주의">회신 대기</span>';}},
+        {label:'',render:function(r){return '<button class="nav-item" style="width:auto;border:1px solid var(--border);border-radius:6px;font-size:11px;padding:3px 7px" data-v="'+r.메뉴+'">열기</button>';}}
+      ], ASK));
+    h+=note('※ 회신이 오면 해당 줄을 지우고 그 메뉴의 판정을 다시 매기겠습니다. '+
+      '제가 혼자 할 수 있는 일은 이 표에 올리지 않았습니다.');
+
     /* ── 이 방과 묶여 있는 다른 자료 ── */
     h+=panel('이 방과 묶여 있는 자료',
-      '인사 자료는 이 방 하나로 모았습니다. 다만 아래 둘은 성격이 달라 따로 둡니다.',
+      '인사 자료는 이 방 하나로 모았습니다. 아래 둘은 경계가 겹치는 다른 방입니다.',
       cards([
-        card('인사 CFO 사령탑 운영 교육','<p style="margin:0 0 7px">직원에게 이 방 쓰는 법을 가르치는 발표 자료입니다. '+
-          '슬라이드 40여 장짜리라 이 방 안으로 옮겨 넣을 수 없습니다. 이름만 옛것(「인사 CFO 사령탑」)으로 남아 있습니다.</p>'+
-          '<p style="margin:0"><a href="https://claude.ai/artifact/2nsRYXeZRiAkLwt4xtghMk" target="_blank" rel="noopener">열기 →</a></p>','발표 자료'),
         card('센타직 인력 운영','<p style="margin:0 0 7px">온라인물류·포장 센타직 인력 운영을 따로 본 방입니다. '+
           '여기 1번 「부서별 인건비」와 숫자가 겹치므로, 숫자가 어긋나면 이 방을 기준으로 보십시오.</p>'+
           '<p style="margin:0"><a href="https://claude.ai/artifact/NREESJKLGQTdLuLNo6Cc1z" target="_blank" rel="noopener">열기 →</a></p>','중복 주의'),
@@ -5015,6 +5083,100 @@
     el.innerHTML=h;
   }
 
+  /* ================= 3-1. 월별 인원 변동 ================= */
+  var vmnY='2026';
+  function vMn(){
+    var M=D.monthDesk;
+    if(!M) return head('3-1. 월별 인원 변동','자료가 아직 없습니다.',['part','미연결']);
+    var G=M.집계, YS=M.연도.map(function(y){return y.연도;});
+    if(YS.indexOf(vmnY)<0) vmnY=YS[YS.length-1];
+    var h=head('3-1. 월별 인원 변동 · 입사 · 퇴사 · 휴직',
+      '가로가 월이고 아래가 항목입니다. '+esc(M.범위),['part',G.첫월+' ~ '+G.끝월]);
+    h+='<div class="kpi-row">'+
+      kpi('기간',G.개월+'개월',G.첫월+' ~ '+G.끝월,'lead')+
+      kpi('누적 퇴사',G.총퇴사+'명','인사명부 원본 — 연간 합이 정확히 맞습니다')+
+      kpi('확인된 입사',G.총입사+'명','재직자 입사일을 다 못 가져와 실제보다 적습니다','warn')+
+      kpi('최다 퇴사월',esc(G.최대월퇴사),G.최대월퇴사수+'명','bad')+
+      kpi('최다 입사월',esc(G.최대월입사),G.최대월입사수+'명')+
+      kpi('명부 현원 대비',(G.기말차>0?'+':'')+G.기말차+'명','명부 '+G.명부기말+'명 / 이 표 '+G.현재기말+'명','bad')+
+      '</div>';
+
+    /* 모자란 부분을 먼저 말한다 */
+    h+='<div class="panel flat" style="border-color:var(--warn);background:var(--accent-soft);margin-bottom:11px">'+
+      '<div style="padding:12px 14px;font-size:12.3px;line-height:1.65">'+
+      '<b>이 표에서 믿을 수 있는 줄과 모자란 줄</b><br>'+
+      '<b>퇴사·휴직·산재·인건비</b>는 원본이 있어 그대로 맞습니다. 퇴사는 연간 합이 9-1 이직률 표와 한 명도 틀리지 않습니다.<br>'+
+      '<b>입사·기초·기말</b>은 '+Math.abs(G.기말차)+'명만큼 적습니다. '+esc(M.대조.설명)+'<br>'+
+      '<span style="color:var(--accent)">메우는 법 — '+esc(M.대조.메우는법)+'</span>'+
+      '</div></div>';
+
+    h+='<div class="searchbar"><span style="font-size:11.5px;color:var(--ink-3);align-self:center;padding-right:4px">연도</span>'+
+      YS.map(function(y){
+        return '<button class="co-btn'+(vmnY===y?' on':'')+'" data-vmn="'+y+'">'+y+'</button>';
+      }).join('')+'</div>';
+
+    var ms=M.월별.filter(function(r){return r.월.indexOf(vmnY)===0;});
+    var cols=[{label:'항목',cls:'strong',render:function(it){
+      return '<b>'+esc(it.이름)+'</b><br><span class="sub">'+esc(it.설명)+'</span>';}}];
+    ms.forEach(function(r){
+      cols.push({label:r.월.slice(5)+'월',num:true,render:function(it){
+        var v=r[it.키];
+        if(v===null||v===undefined) return '<span class="muted">-</span>';
+        if(it.단위==='%') return pct(v,1);
+        if(it.단위==='원') return '<span style="font-size:10.5px">'+man(v)+'</span>';
+        if(it.키==='순증') return v>0?'<span style="color:var(--accent)">+'+v+'</span>':
+                                 (v<0?'<span style="color:var(--crit)">'+v+'</span>':'0');
+        if((it.키==='퇴사'||it.키==='휴직'||it.키==='산재')&&v) return '<span style="color:var(--crit)">'+v+'</span>';
+        return v?cnt(v):'<span class="muted">0</span>';
+      }});
+    });
+    cols.push({label:'연간',num:true,cls:'strong',render:function(it){
+      var vs=ms.map(function(r){return r[it.키];}).filter(function(v){return v!==null&&v!==undefined;});
+      if(!vs.length) return '<span class="muted">-</span>';
+      if(it.키==='입사'||it.키==='퇴사'||it.키==='순증')
+        return cnt(vs.reduce(function(a,b){return a+b;},0));
+      if(it.키==='인건비') return '<span style="font-size:10.5px">'+eok(vs.reduce(function(a,b){return a+b;},0))+'</span>';
+      if(it.단위==='원') return '<span style="font-size:10.5px">'+
+        man(vs.reduce(function(a,b){return a+b;},0)/vs.length)+'</span> <span class="sub">평균</span>';
+      if(it.단위==='%') return pct(vs.reduce(function(a,b){return a+b;},0)/vs.length,1)+' <span class="sub">평균</span>';
+      if(it.키==='기초') return cnt(vs[0])+' <span class="sub">연초</span>';
+      if(it.키==='기말') return cnt(vs[vs.length-1])+' <span class="sub">연말</span>';
+      return cnt(Math.round(vs.reduce(function(a,b){return a+b;},0)/vs.length))+' <span class="sub">평균</span>';
+    }});
+    h+=panel(vmnY+'년 월별 ('+ms.length+'개월)',
+      '빨간 숫자는 사람이 빠진 것입니다. 「구분 미기재」가 큰 것은 재직자에게 고용형태가 안 붙어 있기 때문입니다.',
+      table(cols, M.항목));
+
+    /* 연도 대조 */
+    h+=panel('연도 대조 — 이 표 vs 인사명부',
+      '퇴사는 0으로 맞습니다. 입사와 기말의 차이가 곧 「사람 단위로 못 가진 재직자」 수입니다.',
+      table([
+        {label:'연도',cls:'strong',render:function(r){return '<b class="num">'+esc(r.연도)+'</b>'+(r.개월<12?' <span class="sub">'+r.개월+'개월</span>':'');}},
+        {label:'기초',num:true,render:function(r){return cnt(r.기초);}},
+        {label:'입사',num:true,render:function(r){return cnt(r.입사);}},
+        {label:'명부 입사',num:true,render:function(r){return cnt(r.명부입사);}},
+        {label:'차',num:true,render:function(r){return r.입사차?'<span style="color:var(--crit)">'+(r.입사차>0?'+':'')+r.입사차+'</span>':'<span style="color:var(--accent)">0</span>';}},
+        {label:'퇴사',num:true,render:function(r){return cnt(r.퇴사);}},
+        {label:'명부 퇴사',num:true,render:function(r){return cnt(r.명부퇴사);}},
+        {label:'차',num:true,render:function(r){return r.퇴사차?'<span style="color:var(--crit)">'+(r.퇴사차>0?'+':'')+r.퇴사차+'</span>':'<span style="color:var(--accent)">0</span>';}},
+        {label:'기말',num:true,render:function(r){return cnt(r.기말);}},
+        {label:'명부 기말',num:true,cls:'strong',render:function(r){return cnt(r.명부기말);}},
+        {label:'차',num:true,render:function(r){return r.기말차?'<span style="color:var(--crit)">'+(r.기말차>0?'+':'')+r.기말차+'</span>':'<span style="color:var(--accent)">0</span>';}},
+        {label:'이직률',num:true,render:function(r){return pct(r.이직률,1);}},
+        {label:'인건비',num:true,render:function(r){return r.인건비?eok(r.인건비):'<span class="muted">-</span>';}}
+      ], M.연도));
+
+    h+=panel('월별로 아직 없는 칸','요청하신 「휴가」가 여기 들어 있습니다. 금액은 있는데 일수가 없습니다.',
+      table([
+        {label:'항목',cls:'strong',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+        {label:'왜 없는가',render:function(r){return esc(r.왜);}}
+      ], M.없는항목), true);
+
+    h+=note('※ '+M.한계.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(M.출처));
+    return h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -5077,6 +5239,7 @@
     {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
     {id:'v3', n:'3', t:'월별 카테고리별 지급',       g:'인건비 현황', f:v3},
+    {id:'vmn',n:'3-1',t:'월별 인원 변동 · 입퇴사',  g:'인건비 현황', f:vMn},
     {id:'v4', n:'4', t:'직원 현황',                g:'직원', f:v4},
     {id:'v5', n:'5', t:'개인별 연봉 히스토리',       g:'직원', f:v5},
     {id:'vap',n:'5-1',t:'입사원서 · 이력 조회',      g:'직원', f:vAp},
@@ -5309,6 +5472,9 @@
         b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
       });
     }
+    if(id==='vmn') document.querySelectorAll('[data-vmn]').forEach(function(b){
+      b.addEventListener('click',function(){ vmnY=b.getAttribute('data-vmn'); go('vmn'); });
+    });
     if(id==='vsv'){
       document.querySelectorAll('[data-vsv]').forEach(function(b){
         b.addEventListener('click',function(){ vsvTab=b.getAttribute('data-vsv'); go('vsv'); });
