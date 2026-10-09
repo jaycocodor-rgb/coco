@@ -184,7 +184,7 @@
 
 <div id="sidebar">
   <div class="brand">
-    <h1>인사 CFO 사령탑</h1>
+    <h1>인사 관리</h1>
     <p>코코도르 · 코코도르팜 · 대만법인<br>169명 · 한국 2026-02 / 대만 2026-01</p>
     <span class="stamp">실측 급여대장 기반</span>
   </div>
@@ -538,7 +538,7 @@
     var ent=GT.entities.filter(function(x){return x.법인===CO;})[0];
     var coCnt=isTw?tw.인원:(CO==='전체'?GT.총인원:(ent?ent.인원:HC));
     var coPay=isTw?tw.총원가_KRW:(CO==='전체'?GT.총월인건비:(ent?ent.월인건비:TOT));
-    var h=head('인사 CFO 요약',
+    var h=head('0-1. 인사 관리 요약',
       (CO==='전체'?'3개 법인 169명 실측':'<b>'+esc(CO)+'</b> '+coCnt+'명 실측')+
       '. 아래 전 메뉴의 핵심 결론만 모았습니다. 왼쪽 「회사 구분」으로 법인을 바꿀 수 있습니다.',['real','실측']);
     h+='<div class="kpi-row">'+
@@ -4510,6 +4510,496 @@
   }
 
   /* ================= 부록 ================= */
+  /* ================= 0. 인사 브리핑 ================= */
+  function vBr(){
+    var L=D.lawCheck, DK=D.docDesk, SV=D.sevDesk, DG=D.dailyLedger, RV=D.rv360, AT=D.attDesk;
+    var LG=(L&&L.집계)||{}, IS={}; (D.issueSummary||[]).forEach(function(x){ IS[x.심각도]=x.건수; });
+    var h=head('0. 인사 브리핑',
+      '지금 인사에서 무엇이 문제인지 한 장으로 봅니다. 아래 숫자는 모두 이 방의 다른 메뉴에서 계산된 값이고, '+
+      '제가 판단을 보탠 것은 「왜 문제인가」와 순서뿐입니다.',['part','기준 '+esc(D.asOf)]);
+
+    h+='<div class="kpi-row">'+
+      kpi('법 위반 확정',(LG.위반||0)+'건','최저임금 · 4대보험','bad')+
+      kpi('위반 위험',(LG.위험||0)+'건','기간제 2년 · 연장근로 한도','warn')+
+      kpi('판정 못 함',(LG.확인불가||0)+'건','자료가 없어 적합·위반을 못 가립니다','warn')+
+      kpi('급여 오류 치명',(IS['치명']||0)+'건','주의 '+(IS['주의']||0)+' · 참고 '+(IS['참고']||0),'bad')+
+      kpi('입사서류 미확인',cnt((DK&&DK.집계.미확인건수)||0)+'건',((DK&&DK.집계.대상인원)||0)+'명 × 평균 '+((DK&&DK.집계['1인평균'])||0)+'종','bad')+
+      kpi('퇴직연금 계좌 없음',((SV&&SV.집계.미가입1년)||0)+'명','1년 넘게 미개설 — 적립만 하고 있습니다','bad')+
+      '</div>';
+
+    /* ── 우선순위 ── */
+    var PRI=[
+      {n:1, 급:'치명', 사안:'최저임금 미달',
+       근거:'최저임금법 제6조 · 제28조 — 3년 이하 징역 또는 3천만원 이하 벌금',
+       상태:'위반 확정. 13번 「급여 · 수당 오류 검증」과 법규 점검 ①에 사람별로 들어 있습니다.',
+       할일:'해당 인원의 2026년 시급을 10,320원 이상으로 올리고 소급분을 정산합니다. 급여 재계산이 먼저입니다.',
+       메뉴:'v12'},
+      {n:2, 급:'치명', 사안:'4대보험 미가입자',
+       근거:'국민연금법 제128조 · 국민건강보험법 제115조 — 과태료와 보험료 소급 추징',
+       상태:'위반 확정. 급여대장에 보험료 공제가 없는 사람이 남아 있습니다.',
+       할일:'가입 대상 여부를 사람별로 확정하고, 대상이면 즉시 취득 신고합니다. 소급 보험료는 회사 부담분이 함께 붙습니다.',
+       메뉴:'v12'},
+      {n:3, 급:'치명', 사안:'퇴직연금 계좌 미개설 '+((SV&&SV.집계.미가입1년)||0)+'명',
+       근거:'근로자퇴직급여보장법 제20조 — 확정기여형은 가입자 계좌에 연 1회 이상 납입',
+       상태:'대장에는 매월 적립액이 잡혀 있는데 운용사 칸이 비어 있습니다. 가장 오래된 사람은 입사 '+
+            ((SV&&SV.미가입1년&&SV.미가입1년[0])?SV.미가입1년[0].미가입경과월+'개월':'-')+' 경과입니다.',
+       할일:'적립액이 실제로 금융기관에 들어갔는지 먼저 확인합니다. 안 들어갔으면 지연이자까지 얹어 납입해야 합니다.',
+       메뉴:'vsv'},
+      {n:4, 급:'치명', 사안:'근로계약서 교부 여부를 모름',
+       근거:'근로기준법 제17조 · 제114조 — 500만원 이하 벌금 (1인당)',
+       상태:'판정 못 함. 입사서류 '+cnt((DK&&DK.집계.총필요건수)||0)+'건 가운데 확인된 것이 '+
+            ((DK&&DK.집계.확인건수)||0)+'건입니다. 서류가 있는지 없는지 자체를 모릅니다.',
+       할일:'5-1 입사원서 조회의 서류 체크란을 채웁니다. 150명 전수는 오래 걸리니 외국인 '+
+            ((DK&&DK.집계.외국인)||0)+'명과 현장직 '+((DK&&DK.집계.현장직)||0)+'명부터 봅니다.',
+       메뉴:'vap'},
+      {n:5, 급:'주의', 사안:'기간제 2년 초과',
+       근거:'기간제법 제4조 — 2년을 넘기면 기간의 정함이 없는 근로자로 전환됩니다',
+       상태:'위험. 계약 종료로 처리하면 부당해고 다툼이 됩니다.',
+       할일:'대상자의 계약 시작일을 확인해 전환 또는 종료 시점을 정합니다. 결정을 미루면 자동 전환입니다.',
+       메뉴:'v12'},
+      {n:6, 급:'주의', 사안:'연차 부여·사용 기록이 없음',
+       근거:'근로기준법 제60조 · 제110조 — 2년 이하 징역 또는 2천만원 이하 벌금',
+       상태:'판정 못 함. 급여대장에 연차수당 금액은 있는데 며칠 발생했고 며칠 썼는지가 없습니다.',
+       할일:'5240 근태 API를 붙이면 개인별 발생·사용·잔여가 한 번에 들어옵니다. 이 서버에서 접속이 막혀 회사 PC에서 받아야 합니다.',
+       메뉴:'vat'},
+      {n:7, 급:'주의', 사안:'일일보고 접수율 '+pct((DG&&DG.집계.접수율)||0,0),
+       근거:'-',
+       상태:'근무일 '+((DG&&DG.집계.근무일)||0)+'일 가운데 '+((DG&&DG.집계.접수)||0)+'일만 받았습니다. '+
+            '야근비·외주비 집계가 '+((DG&&DG.집계.미접수근무일)||0)+'일 비어 있습니다.',
+       할일:'빠진 날의 보고를 모아 넣거나, 5240에서 직접 받아 보고 의존을 끊습니다.',
+       메뉴:'vdg'},
+      {n:8, 급:'참고', 사안:'다면평가를 한 번도 실시하지 않음',
+       근거:'-',
+       상태:'배정표는 '+((RV&&RV.집계.대상)||0)+'명 '+cnt((RV&&RV.집계.총응답건)||0)+'건까지 짜여 있고 점수가 0건입니다. '+
+            '관리자 공석 부서가 '+((RV&&RV.집계.관리자공석부서)||0)+'개입니다.',
+       할일:'공석 부서의 평가 단위를 본부로 올린 뒤 1차를 돌립니다. 등급 A~D는 인상률 구간이지 평가 결과가 아닙니다.',
+       메뉴:'vrp'}
+    ];
+    h+=panel('지금 급한 순서','위에서부터 처리하면 됩니다. 1~4번은 벌칙 조항이 붙어 있어 미루면 금액이 커집니다.',
+      table([
+        {label:'',cls:'strong',render:function(r){return '<b class="num">'+r.n+'</b>';}},
+        {label:'등급',render:function(r){return '<span class="sev '+r.급+'">'+r.급+'</span>';}},
+        {label:'사안',cls:'strong',render:function(r){return '<b>'+esc(r.사안)+'</b><br><span class="sub">'+esc(r.근거)+'</span>';}},
+        {label:'지금 상태',render:function(r){return esc(r.상태);}},
+        {label:'다음에 할 일',render:function(r){return esc(r.할일);}},
+        {label:'',render:function(r){return '<button class="nav-item" style="width:auto;border:1px solid var(--border);border-radius:6px;font-size:11px;padding:3px 7px" data-v="'+r.메뉴+'">열기</button>';}}
+      ], PRI));
+
+    /* ── 판정 못 하는 것 ── */
+    var unk=((L&&L.점검)||[]).filter(function(x){return x.판정==='확인불가';});
+    h+=panel('자료가 없어 판정 못 하는 것 — '+unk.length+'건',
+      '적합이라서 조용한 것이 아니라, 볼 자료가 없어서 조용한 것입니다. 둘을 섞으면 안 됩니다.',
+      table([
+        {label:'항목',cls:'strong',render:function(r){return '<b>'+esc(r.항목)+'</b>';}},
+        {label:'등급',render:function(r){return '<span class="sev '+esc(r.심각도)+'">'+esc(r.심각도)+'</span>';}},
+        {label:'근거',render:function(r){return esc(r.근거);}},
+        {label:'무엇이 없는가',render:function(r){return esc(r.내용);}}
+      ], unk));
+
+    /* ── 막혀 있는 것 ── */
+    h+=panel('막혀 있는 것','제가 더 못 나가는 지점입니다. 사람 손이 필요합니다.',
+      cards([
+        card('5240 근태 API','<p style="margin:0">서비스영역ID·siteId·siteNm·사번까지 확인했고 호출 서명도 맞춰 두었습니다. '+
+          '그런데 이 서버에서 api.5240.cloud 로 나가는 길이 막혀 있습니다(403). 회사 PC에서 명령 한 줄을 돌려 '+
+          '파일을 받아 주시면 근태·연차 잔여가 전부 채워집니다.</p>','차단'),
+        card('입사서류 실물','<p style="margin:0">서류가 어디 있는지(종이·드라이브·라인웍스)를 몰라 존재 여부를 확인할 수 없습니다. '+
+          '보관 위치를 알려 주시면 폴더를 훑어 체크란을 자동으로 채웁니다.</p>','미확인'),
+        card('2023년 퇴직연금 대장','<p style="margin:0">2024·2025·2026은 개인별 월납 대장이 있는데 2023년만 없습니다. '+
+          '퇴사자 개별 계산서 '+((SV&&SV['2023퇴사자'])?SV['2023퇴사자'].length:0)+'건만 남아 있습니다.</p>','자료 없음'),
+        card('드라이브 2차 인증','<p style="margin:0">인사·재무 폴더는 CEO 계정 전체 연결 대신 폴더 단위 공유를 권합니다. '+
+          '2단계 인증은 문자보다 인증 앱이나 보안키로 두시고, 외부 공유·다운로드·인쇄는 막아 두십시오. '+
+          '이건 구글 설정이라 대표님이 직접 하셔야 합니다.</p>','대표 조치')
+      ]),true);
+
+    h+=note('※ 이 브리핑은 다른 메뉴의 집계를 모아 보여 줄 뿐이고 따로 계산하지 않습니다. '+
+      '숫자가 이상하면 해당 메뉴를 열어 원본을 보십시오. '+
+      '「판정 못 함」을 적합으로 바꿔 쓰지 않았습니다.');
+    return h;
+  }
+
+  /* ================= 20. 퇴직급여 ================= */
+  var vsvTab='연도', vsv={q:'', 법인:'전체', 정렬:'불입', sel:null};
+  function svRows(){
+    var S=D.sevDesk; if(!S) return [];
+    var rows=noP(S.사람).filter(function(r){
+      if(CO==='대만법인') return false;
+      if(CO!=='전체' && r.법인!==CO) return false;
+      if(vsv.법인!=='전체' && r.법인!==vsv.법인) return false;
+      if(vsv.q){ var q=vsv.q.toLowerCase();
+        if((r.성명+' '+r.직원번호+' '+r.운용사).toLowerCase().indexOf(q)<0) return false; }
+      return true;
+    });
+    var O=vsv.정렬;
+    rows.sort(function(a,b){
+      if(O==='불입') return b.관측기간불입-a.관측기간불입;
+      if(O==='불입역') return a.관측기간불입-b.관측기간불입;
+      if(O==='입사') return String(a.입사일||'9').localeCompare(String(b.입사일||'9'));
+      if(O==='입사역') return String(b.입사일||'').localeCompare(String(a.입사일||''));
+      if(O==='운용사') return String(a.운용사).localeCompare(String(b.운용사))||b.관측기간불입-a.관측기간불입;
+      return String(a.성명).localeCompare(String(b.성명),'ko');
+    });
+    return rows;
+  }
+  function vSv(){
+    var S=D.sevDesk;
+    if(!S) return head('20. 퇴직연금 · 퇴직금','자료가 아직 없습니다.',['part','미연결']);
+    var G=S.집계;
+    var h=head('20. 퇴직연금 불입 · 퇴직금 지급',
+      '개인별로, 연도별로 봅니다. '+esc(S.제도),['part',G.연도.join('·')+' 실측']);
+    h+='<div class="kpi-row">'+
+      kpi('불입 총액',eok(G.불입총계),G.연도.join('·')+' · '+G.사람수+'명 (임원 제외)','lead')+
+      kpi('퇴직금 지급',eok(G.퇴직지급총계),G.퇴직건수+'명 최종 정산')+
+      kpi('계좌 없음',G.계좌없음+'명','운용사 칸이 비어 있습니다','warn')+
+      kpi('1년 초과 미개설',G.미가입1년+'명','근퇴법 제20조 납입 의무 경과','bad')+
+      kpi('지연이자 발생',G.지연이자+'건','모두 2025년 퇴직자','bad')+
+      kpi('연도 범위',G.연도.length+'개년','2023년 대장 없음','warn')+
+      '</div>';
+    var TB=[['연도','① 연도별 추이'],['개인','② 개인별 조회'],['지급','③ 퇴직금 지급 대장'],['점검','④ 법규 점검']];
+    h+='<div class="searchbar">'+TB.map(function(t){
+      return '<button class="nav-item'+(vsvTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vsv="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vsvTab==='연도'){
+      var YR=S.연도별.filter(function(r){ return CO==='전체'||CO==='대만법인'?true:r.법인===CO; });
+      var mx=maxOf(YR,function(x){return x.불입액;});
+      h+=panel('연도 × 법인 — 불입과 지급',
+        '불입액은 회사가 그 해 실제로 부담한 금액입니다. 확정기여형이라 불입하면 그 달로 책임이 끝납니다.',
+        table([
+          {label:'연도',cls:'strong',render:function(r){return '<b class="num">'+esc(r.연도)+'</b>';}},
+          {label:'법인',render:function(r){return esc(r.법인);}},
+          {label:'불입 인원',num:true,render:function(r){return r.불입인원+'명';}},
+          {label:'불입액',num:true,cls:'strong',render:function(r){return won(r.불입액);}},
+          {label:'',render:function(r){return bar(r.불입액,mx);}},
+          {label:'1인 월평균',num:true,render:function(r){return man(r.월평균불입);}},
+          {label:'퇴직 인원',num:true,render:function(r){return r.퇴직인원+'명';}},
+          {label:'퇴직금 지급',num:true,render:function(r){return won(r.퇴직지급);}},
+          {label:'지연이자',num:true,render:function(r){return r.지연이자건?'<span class="sev 치명">'+r.지연이자건+'건</span>':'<span class="muted">-</span>';}}
+        ], YR));
+      h+=panel('운용 금융기관','계좌가 어디에 있는지입니다. 「미가입」과 「확인필요」는 계좌가 확인되지 않은 사람입니다.',
+        table([
+          {label:'운용사',cls:'strong',render:function(r){return r.운용사==='미가입'||r.운용사==='확인필요'?
+            '<span class="sev 주의">'+esc(r.운용사)+'</span>':'<b>'+esc(r.운용사)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'적립액',num:true,cls:'strong',render:function(r){return won(r.불입);}},
+          {label:'',render:function(r){return bar(r.불입,maxOf(S.운용사별,function(x){return x.불입;}));}}
+        ], S.운용사별));
+      h+=panel('퇴직자 근속 분포','얼마나 다니다 나갔는지입니다.',
+        table([
+          {label:'근속',cls:'strong',render:function(r){return '<b>'+esc(r.구간)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'',render:function(r){return bar(r.인원,maxOf(S.근속구간,function(x){return x.인원;}));}}
+        ], S.근속구간), true);
+    }
+
+    if(vsvTab==='개인'){
+      var rows=svRows();
+      h+='<div class="searchbar">'+
+        '<input id="svq" type="search" placeholder="이름 · 사번 · 운용사 검색" value="'+esc(vsv.q)+'">'+
+        '<select id="svc"><option value="전체">법인 전체</option>'+['코코도르','코코도르팜'].map(function(x){
+          return '<option value="'+x+'"'+(vsv.법인===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select>'+
+        '<select id="svo">'+[['불입','적립 많은 순'],['불입역','적립 적은 순'],['입사','입사 빠른 순'],
+          ['입사역','입사 늦은 순'],['운용사','운용사별'],['이름','이름순']].map(function(o){
+          return '<option value="'+o[0]+'"'+(vsv.정렬===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+        '</div>';
+      h+='<div class="foot-note" style="padding:0 2px 6px">'+rows.length+'명</div>';
+      h+='<div class="pick"><div class="person-list" id="svList"></div><div id="svCard"></div></div>';
+      h+=hideNote();
+    }
+
+    if(vsvTab==='지급'){
+      var P=S.퇴직지급.filter(function(r){ return CO==='전체'||CO==='대만법인'?true:r.법인===CO; });
+      h+=panel('퇴직금 지급 대장 — '+P.length+'명',
+        '퇴직할 때 최종 정산한 금액입니다. 기 납입분에 마지막 추가 납입분을 더한 값입니다.',
+        table([
+          {label:'퇴사일',cls:'strong',render:function(r){return '<b class="num">'+esc(r.퇴사일||'-')+'</b>';}},
+          {label:'성명',cls:'strong',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'법인',render:function(r){return esc(r.법인);}},
+          {label:'입사일',render:function(r){return '<span class="num">'+esc(r.입사일||'-')+'</span>';}},
+          {label:'근속',num:true,render:function(r){return r.근속년!==null?r.근속년+'년':'-';}},
+          {label:'기 납입',num:true,render:function(r){return r.기납입?won(r.기납입):'<span class="muted">-</span>';}},
+          {label:'추가 납입',num:true,render:function(r){return r.추가납입?won(r.추가납입):'<span class="muted">-</span>';}},
+          {label:'총 지급',num:true,cls:'strong',render:function(r){return won(r.총지급);}},
+          {label:'운용사',render:function(r){return esc(r.운용사);}},
+          {label:'지급기한',render:function(r){return '<span class="num">'+esc(r.지급기한||'-')+'</span>';}},
+          {label:'지연',render:function(r){return r.지연이자?'<span class="sev 치명">이자</span>':'';}}
+        ], P, '640px', function(r){ return r.지연이자?'warn':''; }));
+      h+=note('※ 지급기한은 퇴직일부터 14일(근로기준법 제36조·근퇴법 제9조)입니다. '+
+        '실제 입금일은 대장에 없어 기한을 지켰는지는 「지연」 표시로만 알 수 있습니다.');
+    }
+
+    if(vsvTab==='점검'){
+      S.점검.forEach(function(c){
+        var bad=(c.판정!=='해당 없음' && c.판정!=='적합');
+        var body='<p style="margin:0 0 8px"><b>'+esc(c.판정)+'</b> · 대상 '+c.대상+'건</p>'+
+          '<p style="margin:0 0 8px;font-size:12px;color:var(--ink-2)">'+esc(c.설명)+'</p>'+
+          '<p style="margin:0;font-size:11.5px;color:var(--ink-3)">'+esc(c.근거)+'</p>';
+        h+=panel(esc(c.항목), '', '<div style="padding:12px 14px">'+body+'</div>'+
+          (c.명단&&c.명단.length? table(Object.keys(c.명단[0]).map(function(k){
+            return {label:k, num:(typeof c.명단[0][k]==='number'),
+              render:function(r){ var v=r[k];
+                return typeof v==='number' ? (k.indexOf('액')>=0||k.indexOf('지급')>=0?won(v):cnt(v)) : esc(v===null?'-':v); }};
+          }), c.명단, '320px') : ''), !bad);
+      });
+    }
+
+    h+=note('※ '+S.주의.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(S.출처));
+    return h;
+  }
+  function renderSvList(){
+    var el=document.getElementById('svList'); if(!el) return;
+    var rows=svRows();
+    if(!rows.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">조건에 맞는 사람이 없습니다.</div>'; vsv.sel=null; }
+    else{
+      if(!vsv.sel || !rows.some(function(r){return r.직원번호===vsv.sel;})) vsv.sel=rows[0].직원번호;
+      el.innerHTML=rows.map(function(r){
+        return '<button class="person-row" aria-selected="'+(r.직원번호===vsv.sel?'true':'false')+'" data-svp="'+esc(r.직원번호)+'">'+
+          '<span><b>'+esc(r.성명)+'</b>'+(r.계좌없음?' <span class="sev 주의">계좌없음</span>':'')+
+          (r.퇴직일자?' <span class="sev 참고">퇴직</span>':'')+
+          '<br><span class="sub">'+esc(r.법인)+' · '+esc(r.운용사)+' · '+esc((r.입사일||'').slice(0,7))+'</span></span>'+
+          '<span class="num" style="font-size:11px;text-align:right">'+man(r.관측기간불입)+
+          '<br><span class="sub">'+r.연수+'개년</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-svp]').forEach(function(b){
+        b.addEventListener('click',function(){ vsv.sel=b.getAttribute('data-svp'); renderSvList(); });
+      });
+    }
+    renderSvCard();
+  }
+  function renderSvCard(){
+    var el=document.getElementById('svCard'); if(!el) return;
+    var S=D.sevDesk, r=S.사람.filter(function(x){return x.직원번호===vsv.sel;})[0];
+    if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 사람을 선택하세요.</div></div>'; return; }
+    var pay=S.퇴직지급.filter(function(x){return x.성명===r.성명 && x.법인===r.법인;})[0];
+    var ys=Object.keys(r.연도별).sort(), ms=Object.keys(r.월별).sort();
+    var mxY=Math.max.apply(null,ys.map(function(y){return r.연도별[y];}).concat([0]));
+    var h='<div class="panel flat"><div class="panel-head"><h2>'+esc(r.성명)+
+      ' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(r.직원번호)+'</span>'+
+      (r.계좌없음?' <span class="sev 주의">계좌 없음</span>':'')+'</h2>'+
+      '<div class="panel-note">'+esc(r.법인)+' · '+esc(r.운용사)+' · '+esc(r.경비구분||'-')+'</div></div>';
+    h+='<div class="kpi-row" style="margin-bottom:11px">'+
+      kpi('관측기간 적립',won(r.관측기간불입),ys.join('·')+' 합계','lead')+
+      kpi('이전 귀속',r.이전적립?won(r.이전적립):'자료 없음',r.이전적립?'대장의 「이전 귀속」 칸':'해당 칸이 비어 있습니다')+
+      kpi('누적 추정',r.누적적립추정?won(r.누적적립추정):'-','운용 손익은 빠져 있습니다')+
+      kpi('상태',r.퇴직일자?'퇴직':'재직',r.퇴직일자?esc(r.퇴직일자)+' 퇴사':'입사 '+esc(r.입사일||'-'),r.퇴직일자?'warn':'')+
+      '</div>';
+    h+='<div class="cards" style="margin-bottom:11px">'+
+      '<div class="card"><h3>연도별 불입</h3>'+
+      table([{label:'연도',cls:'strong',render:function(y){return '<b class="num">'+y+'</b>';}},
+             {label:'불입액',num:true,cls:'strong',render:function(y){return won(r.연도별[y]);}},
+             {label:'',render:function(y){return bar(r.연도별[y],mxY);}},
+             {label:'월평균',num:true,render:function(y){return man(r.연도별[y]/12);}}], ys)+
+      '</div>'+
+      '<div class="card"><h3>기본</h3><dl class="kv">'+
+        '<dt>입사일</dt><dd>'+esc(r.입사일||'-')+'</dd>'+
+        '<dt>그룹 입사일</dt><dd>'+esc(r.그룹입사일||'-')+(r.그룹입사일&&r.그룹입사일!==r.입사일?' <span class="muted">계열 전입</span>':'')+'</dd>'+
+        '<dt>운용사</dt><dd>'+(r.계좌없음?'<span class="sev 주의">'+esc(r.운용사)+'</span>':esc(r.운용사))+'</dd>'+
+        '<dt>계좌 미개설</dt><dd>'+(r.미가입경과월?r.미가입경과월+'개월 경과':'<span class="muted">해당 없음</span>')+'</dd>'+
+        '<dt>퇴직일</dt><dd>'+esc(r.퇴직일자||'-')+'</dd>'+
+      '</dl>'+
+      (r['1년초과미가입']?'<p style="margin-top:7px;font-size:11.8px;color:var(--crit)">1년이 넘도록 운용사 칸이 비어 있습니다. '+
+        '근퇴법 제20조는 가입자 계좌에 연 1회 이상 넣으라고 합니다. 적립만 하고 납입하지 않았다면 지연이자가 붙습니다.</p>':'')+
+      '</div>'+
+      (pay?'<div class="card" style="border-color:var(--warn)"><h3>퇴직 정산</h3><dl class="kv">'+
+        '<dt>퇴사일</dt><dd>'+esc(pay.퇴사일)+'</dd>'+
+        '<dt>지급기한</dt><dd>'+esc(pay.지급기한||'-')+'</dd>'+
+        '<dt>근속</dt><dd>'+(pay.근속년!==null?pay.근속년+'년':'-')+'</dd>'+
+        '<dt>기 납입</dt><dd>'+won(pay.기납입)+'</dd>'+
+        '<dt>추가 납입</dt><dd>'+won(pay.추가납입)+'</dd>'+
+        '<dt>총 지급</dt><dd><b>'+won(pay.총지급)+'</b></dd>'+
+      '</dl>'+(pay.지연이자?'<p style="margin-top:7px;font-size:11.8px;color:var(--crit)">지연이자가 붙었습니다: '+
+        esc(pay.산정기간.join(' / '))+'</p>':'')+'</div>':'')+
+      '</div>';
+    h+=panel('월별 불입 ('+ms.length+'개월)','대장에 금액이 적힌 달만 나옵니다. 빈 달은 입·퇴사나 휴직입니다.',
+      table([{label:'월',cls:'strong',render:function(m){return '<b class="num">'+m+'</b>';}},
+             {label:'불입액',num:true,cls:'strong',render:function(m){return won(r.월별[m]);}},
+             {label:'',render:function(m){return bar(r.월별[m],Math.max.apply(null,ms.map(function(x){return r.월별[x];}).concat([0])));}}],
+        ms,'300px'),true);
+    h+='</div>';
+    el.innerHTML=h;
+  }
+
+  /* ================= 8-5. 근태 조회 ================= */
+  var vatTab='전사', vat={q:'', 부서:'전체', 정렬:'부서', sel:null};
+  /* 직위 칸에는 '님' 같은 호칭이 섞여 있어 직책으로 쓰지 않는다 */
+  function atRole(r){ var v=r.직책||r.직위||''; v=String(v).trim();
+    return (!v||v==='님'||v==='-')?'사원':v; }
+  function atRows(){
+    var A=D.attDesk; if(!A) return [];
+    var rows=noP(FL(A.사람)).filter(function(r){
+      if(vat.부서!=='전체' && r.소속!==vat.부서) return false;
+      if(vat.q){ var q=vat.q.toLowerCase();
+        if((r.성명+' '+r.직원번호+' '+(r.소속||'')+' '+(r.직책||'')).toLowerCase().indexOf(q)<0) return false; }
+      return true;
+    });
+    var O=vat.정렬;
+    rows.sort(function(a,b){
+      if(O==='부서') return String(a.소속||'').localeCompare(String(b.소속||''),'ko')||String(a.성명).localeCompare(String(b.성명),'ko');
+      if(O==='입사') return String(a.입사일||'9').localeCompare(String(b.입사일||'9'));
+      if(O==='입사역') return String(b.입사일||'').localeCompare(String(a.입사일||''));
+      if(O==='근태') return String(a.당일근태||'').localeCompare(String(b.당일근태||''),'ko');
+      return String(a.성명).localeCompare(String(b.성명),'ko');
+    });
+    return rows;
+  }
+  function vAt(){
+    var A=D.attDesk;
+    if(!A) return head('8-5. 근태 조회','자료가 아직 없습니다.',['part','미연결']);
+    var G=A.집계;
+    var h=head('8-5. 근태 조회 · 부서별 · 개인별',
+      '사람 단위로 모은 근태입니다. '+esc(A.상태),['part',esc(A.기준일)+' 기준']);
+    h+='<div class="kpi-row">'+
+      kpi('대상',G.대상+'명','부서 '+G.부서수+'개','lead')+
+      kpi('근태 기록 있는 사람',G.당일매칭+'명','나머지 '+G.미매칭+'명은 기록 없음(정상 근무)')+
+      kpi('휴직',G.휴직+'명','기간이 있어 날짜축으로 펼칠 수 있습니다','warn')+
+      kpi('산재 요양',G.요양+'명','재해일·요양 시작·종료 보유','warn')+
+      kpi('연차수당',won(G.연차수당계),'금액입니다 — 일수가 아닙니다')+
+      kpi('무급휴가 차감',won(G.무급휴가차감계),'급여에서 깎인 금액','bad')+
+      '</div>';
+    var TB=[['전사','① 전사'],['부서','② 부서별'],['개인','③ 개인별 조회'],['범위','④ 가진 자료 범위']];
+    h+='<div class="searchbar">'+TB.map(function(t){
+      return '<button class="nav-item'+(vatTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vat="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vatTab==='전사'){
+      h+=panel('근태유형 분포 ('+esc(A.기준일)+')',
+        '일일보고는 예외만 적는 문서입니다. 이름이 오르지 않은 사람은 정상 근무로 봤습니다.',
+        table([
+          {label:'유형',cls:'strong',render:function(r){return '<b>'+esc(r.유형)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'비중',num:true,render:function(r){return pct(r.비중,1);}},
+          {label:'',render:function(r){return bar(r.인원,maxOf(A.유형별,function(x){return x.인원;}));}},
+          {label:'비고',render:function(r){return esc(r.비고||'');}}
+        ], A.유형별));
+      h+=note('※ '+A.한계.map(esc).join(' '));
+    }
+    if(vatTab==='부서'){
+      var DT=A.부서별;
+      h+=panel('부서별 근태','출근 칸은 정상 근무(기록 없음 포함)입니다. 연차·휴직은 해당일 기준입니다.',
+        table([
+          {label:'소속',cls:'strong',render:function(r){return '<b>'+esc(r.소속)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'정상 근무',num:true,render:function(r){return r.출근+'명';}},
+          {label:'출근율',num:true,render:function(r){return pct(r.출근율,0);}},
+          {label:'연차',num:true,render:function(r){return r.연차?r.연차+'명':'<span class="muted">-</span>';}},
+          {label:'휴직',num:true,render:function(r){return r.휴직?'<span class="sev 주의">'+r.휴직+'명</span>':'<span class="muted">-</span>';}},
+          {label:'연차수당',num:true,render:function(r){return r.연차수당?won(r.연차수당):'<span class="muted">-</span>';}},
+          {label:'무급 차감',num:true,render:function(r){return r.무급휴가차감?'<span style="color:var(--crit)">'+won(r.무급휴가차감)+'</span>':'<span class="muted">-</span>';}}
+        ], DT, '560px'));
+    }
+    if(vatTab==='개인'){
+      var depts=Array.from(new Set(noP(FL(A.사람)).map(function(r){return r.소속;}))).filter(Boolean).sort();
+      var rows=atRows();
+      h+='<div class="searchbar">'+
+        '<input id="atq" type="search" placeholder="이름 · 사번 · 부서 · 직책 검색" value="'+esc(vat.q)+'">'+
+        '<select id="atd"><option value="전체">부서 전체</option>'+depts.map(function(x){
+          return '<option value="'+esc(x)+'"'+(vat.부서===x?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>'+
+        '<select id="ato">'+[['부서','부서순'],['입사','입사 빠른 순'],['입사역','입사 늦은 순'],
+          ['근태','근태유형순'],['이름','이름순']].map(function(o){
+          return '<option value="'+o[0]+'"'+(vat.정렬===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+        '</div>';
+      h+='<div class="foot-note" style="padding:0 2px 6px">'+rows.length+'명</div>';
+      h+='<div class="pick"><div class="person-list" id="atList"></div><div id="atCard"></div></div>';
+      h+=hideNote();
+    }
+    if(vatTab==='범위'){
+      h+=panel('지금 가진 근태 자료','근태 프로그램처럼 쓰려면 아래 「없음」 줄이 채워져야 합니다.',
+        table([
+          {label:'자료',cls:'strong',render:function(r){return '<b>'+esc(r.자료)+'</b>';}},
+          {label:'범위',render:function(r){return esc(r.범위);}},
+          {label:'건수',num:true,render:function(r){return cnt(r.건수);}},
+          {label:'상태',render:function(r){return r.상태==='없음'?'<span class="sev 치명">없음</span>':
+            (r.상태==='1일'?'<span class="sev 주의">'+esc(r.상태)+'</span>':'<span class="sev 참고">'+esc(r.상태)+'</span>');}},
+          {label:'설명',render:function(r){return esc(r.설명);}}
+        ], A.보유범위));
+      h+=panel('개인별로 관리해야 할 항목','일반 인사 프로그램이 사람마다 들고 있는 칸입니다. 지금 채워진 것과 비어 있는 것을 구분했습니다.',
+        cards([
+          card('채워진 칸','<p style="margin:0">소속·직책·직위·직군·사업장·입사일·근속연수·재직상태·휴직 기간·산재 요양 기간·연차수당 금액·무급휴가 차감 금액</p>','보유'),
+          card('하루치만 있는 칸','<p style="margin:0">당일 근태유형(정상·연차·휴무·출장·외근·휴직). '+esc(A.기준일)+' 하루뿐입니다.</p>','1일'),
+          card('비어 있는 칸','<p style="margin:0">출퇴근 시각 · 연차 발생일수 · 사용일수 · 잔여일수 · 휴가 사유 · 지각·조퇴 · 연장근로 시간. '+
+            '모두 5240에 있습니다.</p>','없음')
+        ]),true);
+      h+=note('※ 연차 잔여는 근로기준법 제60조로 계산할 수 있습니다(1년 미만 월 1일 최대 11일, 1년 이상 15일, 3년 이상 2년마다 1일 가산 최대 25일). '+
+        '다만 「발생」은 계산되고 「사용」은 기록이 있어야 합니다. 사용 기록이 없으면 잔여를 말할 수 없습니다.');
+    }
+    return h;
+  }
+  function renderAtList(){
+    var el=document.getElementById('atList'); if(!el) return;
+    var rows=atRows();
+    if(!rows.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">조건에 맞는 사람이 없습니다.</div>'; vat.sel=null; }
+    else{
+      if(!vat.sel || !rows.some(function(r){return r.직원번호===vat.sel;})) vat.sel=rows[0].직원번호;
+      el.innerHTML=rows.map(function(r){
+        return '<button class="person-row" aria-selected="'+(r.직원번호===vat.sel?'true':'false')+'" data-atp="'+esc(r.직원번호)+'">'+
+          '<span><b>'+esc(r.성명)+'</b>'+(r.휴직?' <span class="sev 주의">휴직</span>':'')+
+          (r.요양건수?' <span class="sev 치명">산재</span>':'')+
+          '<br><span class="sub">'+esc(r.소속||'-')+' · '+esc(atRole(r))+'</span></span>'+
+          '<span class="num" style="font-size:11px;text-align:right">'+esc(r.당일근태||'-')+
+          '<br><span class="sub">'+esc((r.입사일||'').slice(0,7))+'</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-atp]').forEach(function(b){
+        b.addEventListener('click',function(){ vat.sel=b.getAttribute('data-atp'); renderAtList(); });
+      });
+    }
+    renderAtCard();
+  }
+  function renderAtCard(){
+    var el=document.getElementById('atCard'); if(!el) return;
+    var A=D.attDesk, r=A.사람.filter(function(x){return x.직원번호===vat.sel;})[0];
+    if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 사람을 선택하세요.</div></div>'; return; }
+    /* 법정 연차 발생일수 — 근로기준법 제60조 */
+    var 발생=null, 발생설명='';
+    if(r.입사일){
+      var j=new Date(r.입사일), t=new Date(A.기준일||D.asOf+'-01');
+      var mo=(t.getFullYear()-j.getFullYear())*12+(t.getMonth()-j.getMonth());
+      var yr=Math.floor(mo/12);
+      if(yr<1){ 발생=Math.min(mo,11); 발생설명=esc(A.기준일)+' 기준 1년 미만 — 한 달 일하면 1일씩, 최대 11일 (제60조 제2항)'; }
+      else { 발생=Math.min(15+Math.floor((yr-1)/2),25);
+        발생설명=esc(A.기준일)+' 기준 근속 '+yr+'년 — 기본 15일'+(yr>=3?' + 가산 '+(발생-15)+'일 (3년 이상 2년마다 1일, 한도 25일)':'')+' (제60조 제1항·제4항)'; }
+    }
+    var h='<div class="panel flat"><div class="panel-head"><h2>'+esc(r.성명)+
+      ' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(r.직원번호)+'</span>'+
+      (r.휴직?' <span class="sev 주의">휴직</span>':'')+'</h2>'+
+      '<div class="panel-note">'+esc(r.법인||'-')+' · '+esc(r.소속||'-')+' · '+esc(atRole(r))+' · '+esc(r.사업장||'-')+'</div></div>';
+    h+='<div class="kpi-row" style="margin-bottom:11px">'+
+      kpi('당일 근태',esc(r.당일근태||'-'),esc(A.기준일),(r.당일근태==='기록없음'?'':'warn'))+
+      kpi('법정 연차 발생',발생!==null?발생+'일':'-','계산값입니다 — 사용 기록은 없습니다','lead')+
+      kpi('연차 사용','자료 없음','5240 연결 전까지 알 수 없습니다','bad')+
+      kpi('연차 잔여','계산 불가','발생은 알지만 사용을 몰라 뺄 수 없습니다','bad')+
+      '</div>';
+    h+='<div class="cards" style="margin-bottom:11px">'+
+      '<div class="card"><h3>재직</h3><dl class="kv">'+
+        '<dt>입사일</dt><dd>'+esc(r.입사일||'-')+'</dd>'+
+        '<dt>근속</dt><dd>'+(r.근속년수?r.근속년수+'년':'-')+' <span class="muted">'+esc(D.asOf)+' 급여대장 기준</span></dd>'+
+        '<dt>재직상태</dt><dd>'+esc(r.재직상태||'-')+'</dd>'+
+        '<dt>직군</dt><dd>'+esc(r.직군||'-')+'</dd>'+
+      '</dl>'+(발생설명?'<p style="margin-top:7px;font-size:11.5px;color:var(--ink-3)">'+esc(발생설명)+'</p>':'')+'</div>'+
+      '<div class="card"'+(r.휴직?' style="border-color:var(--warn)"':'')+'><h3>휴직</h3>'+
+        (r.휴직?'<dl class="kv">'+
+          '<dt>시작</dt><dd>'+esc(r.휴직시작||'-')+'</dd>'+
+          '<dt>복직 예정</dt><dd>'+esc(r.복직예정||'-')+'</dd>'+
+          '<dt>기간</dt><dd>'+(r.휴직일수?cnt(r.휴직일수)+'일':'-')+
+            ' <span class="muted">'+(r.복직예정==='미정'?'복직 미정 — 오늘까지':'복직예정일까지')+'</span></dd>'+
+        '</dl>':'<p style="margin:0;color:var(--ink-3);font-size:12px">휴직 이력이 없습니다.</p>')+'</div>'+
+      '<div class="card"'+(r.요양건수?' style="border-color:var(--crit)"':'')+'><h3>산재 요양</h3>'+
+        (r.요양건수? table([
+            {label:'시작',render:function(x){return '<span class="num">'+esc(x.시작||'-')+'</span>';}},
+            {label:'종료',render:function(x){return '<span class="num">'+esc(x.종료||'-')+'</span>';}},
+            {label:'일수',num:true,render:function(x){return cnt(x.일수);}},
+            {label:'재해형태',render:function(x){return esc(x.재해형태||'-');}}], r.요양기간)
+          :'<p style="margin:0;color:var(--ink-3);font-size:12px">산재 이력이 없습니다.</p>')+'</div>'+
+      '<div class="card"><h3>연차 관련 금액</h3><dl class="kv">'+
+        '<dt>연차수당</dt><dd>'+(r.연차수당?won(r.연차수당):'<span class="muted">-</span>')+'</dd>'+
+        '<dt>연가보상비</dt><dd>'+(r.연가보상비?won(r.연가보상비):'<span class="muted">-</span>')+'</dd>'+
+        '<dt>무급휴가</dt><dd>'+(r.무급휴가?won(r.무급휴가):'<span class="muted">-</span>')+'</dd>'+
+        '<dt>무급휴가 차감</dt><dd>'+(r.무급휴가차감?'<span style="color:var(--crit)">'+won(r.무급휴가차감)+'</span>':'<span class="muted">-</span>')+'</dd>'+
+      '</dl><p style="margin-top:7px;font-size:11.5px;color:var(--ink-3)">'+esc(D.asOf)+' 급여대장 한 달치 금액입니다. 일수로 바꾸려면 통상임금이 필요합니다.</p></div>'+
+      '</div>';
+    h+='</div>';
+    el.innerHTML=h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -4566,7 +5056,8 @@
 
   /* ================= nav ================= */
   var VIEWS=[
-    {id:'v0', n:'0', t:'인사 CFO 요약',            g:'요약', f:v0},
+    {id:'vbr',n:'0', t:'인사 브리핑 · 현재 문제',   g:'요약', f:vBr},
+    {id:'v0', n:'0-1',t:'인사 관리 요약',            g:'요약', f:v0},
     {id:'v1', n:'1', t:'부서별 인건비 현황',        g:'인건비 현황', f:v1},
     {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
@@ -4585,6 +5076,7 @@
     {id:'vlv',n:'8-2',t:'휴직자 관리',              g:'직원', f:vLv},
     {id:'vdl',n:'8-3',t:'일일 인사 보고 · 5240',  g:'직원', f:vDaily},
     {id:'vdg',n:'8-4',t:'일일 마감 대장 · 3개월',  g:'직원', f:vDg},
+    {id:'vat',n:'8-5',t:'근태 조회 · 부서/개인',    g:'직원', f:vAt},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
     {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
@@ -4598,6 +5090,7 @@
     {id:'v16',n:'17',t:'복리후생 강화 전략',        g:'전략 설계', f:v16},
     {id:'v17',n:'18',t:'인재 확보 전략',            g:'전략 설계', f:v17},
     {id:'vtx',n:'19',t:'세금 · 4대보험 납부',      g:'비용', f:vTax},
+    {id:'vsv',n:'20',t:'퇴직연금 불입 · 퇴직금',    g:'비용', f:vSv},
     {id:'v18',n:'·', t:'데이터 출처 및 한계',        g:'부록', f:v18}
   ];
   var cur='v0';
@@ -4800,6 +5293,28 @@
       document.querySelectorAll('[data-vjc]').forEach(function(b){
         b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
       });
+    }
+    if(id==='vsv'){
+      document.querySelectorAll('[data-vsv]').forEach(function(b){
+        b.addEventListener('click',function(){ vsvTab=b.getAttribute('data-vsv'); go('vsv'); });
+      });
+      var sq=document.getElementById('svq');
+      if(sq) sq.addEventListener('input',function(){ vsv.q=sq.value; vsv.sel=null; renderSvList(); });
+      var sc=document.getElementById('svc'), so=document.getElementById('svo');
+      if(sc) sc.addEventListener('change',function(){ vsv.법인=sc.value; vsv.sel=null; go('vsv'); });
+      if(so) so.addEventListener('change',function(){ vsv.정렬=so.value; go('vsv'); });
+      if(vsvTab==='개인') renderSvList();
+    }
+    if(id==='vat'){
+      document.querySelectorAll('[data-vat]').forEach(function(b){
+        b.addEventListener('click',function(){ vatTab=b.getAttribute('data-vat'); go('vat'); });
+      });
+      var aq=document.getElementById('atq');
+      if(aq) aq.addEventListener('input',function(){ vat.q=aq.value; vat.sel=null; renderAtList(); });
+      var ad=document.getElementById('atd'), ao=document.getElementById('ato');
+      if(ad) ad.addEventListener('change',function(){ vat.부서=ad.value; vat.sel=null; go('vat'); });
+      if(ao) ao.addEventListener('change',function(){ vat.정렬=ao.value; go('vat'); });
+      if(vatTab==='개인') renderAtList();
     }
     if(id==='vtx') document.querySelectorAll('[data-vtx]').forEach(function(b){
       b.addEventListener('click',function(){ vtxTab=b.getAttribute('data-vtx'); go('vtx'); });

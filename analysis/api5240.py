@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 """5240 근태 API 클라이언트 — 일일 인사 보고 자동화용.
 
-인증 정보는 반드시 환경변수로 넘긴다. 파일에 적지 않는다.
-    CO5240_SID        서비스영역ID (정수)         ← 5240에서 발급
-    CO5240_SITE_ID    사이트ID (선택)
-    CO5240_STAFF_NO   요청자 사번 (선택)
+설정값은 5240(박준영 이사) 2026-09-28 회신으로 확정됐고 아래 기본값에 들어 있다.
+환경변수를 주면 그쪽이 이긴다.
+    CO5240_SID        서비스영역ID   기본 1
+    CO5240_SITE_ID    사이트ID       기본 NTI0MENPQ09ET1INCg==
+    CO5240_SITE_NM    사이트명       기본 COCODOR
+    CO5240_STAFF_NO   요청자 사번     기본 admin
 
 사용법
     python api5240.py key                              오늘자 interfaceKey 출력
@@ -17,6 +19,13 @@
     python api5240.py backfill --from 2026-01-01 --to 2026-09-23
                                                        일 단위 소급 수집 (중단 지점 재개)
     python api5240.py report --date 2026-09-23         수집분 → 일일 근태보고 표 생성
+    python api5240.py ledger --from 2026-07-11 --to 2026-10-09
+                                                       수집분 → 인사 방 8-4 일일 마감 대장용 JSON
+
+3개월 한 번에 받기 (회사 PC에서)
+    python api5240.py backfill --from 2026-07-11 --to 2026-10-09
+    python api5240.py ledger   --from 2026-07-11 --to 2026-10-09
+    → out/ledger_20260711_20261009.json 을 대표님께 전달하면 방에 붙는다.
 """
 from __future__ import annotations
 
@@ -41,6 +50,18 @@ RATE_SLEEP = 0.4          # 소급 수집 시 호출 간 간격
 REGULAR_END = dt.time(18, 0)
 FULL_DAY_HOURS = 8.0
 
+# 5240 회신(2026-09-28)으로 확정된 값. 환경변수가 있으면 환경변수가 이긴다.
+DEFAULTS = {
+    'CO5240_SID': '1',
+    'CO5240_SITE_ID': 'NTI0MENPQ09ET1INCg==',
+    'CO5240_SITE_NM': 'COCODOR',
+    'CO5240_STAFF_NO': 'admin',
+}
+
+
+def cfg(name: str) -> str:
+    return os.environ.get(name) or DEFAULTS.get(name, '')
+
 
 # ── 인증 ──────────────────────────────────────────────────────────────
 def interface_key(sid: int, ymd: int) -> int:
@@ -53,7 +74,7 @@ def interface_key(sid: int, ymd: int) -> int:
 
 
 def require_sid() -> int:
-    raw = os.environ.get('CO5240_SID')
+    raw = cfg('CO5240_SID')
     if not raw:
         sys.exit('CO5240_SID 가 설정되지 않았습니다. 5240에서 발급받은 서비스영역ID를 넣으십시오.\n'
                  '  예) export CO5240_SID=1')
@@ -80,8 +101,10 @@ def build_payload(day: dt.date, sid: int) -> dict:
         'interfaceKey': str(interface_key(sid, ymd)),
         'staYmd': str(ymd),
     }
-    for env, field in (('CO5240_SITE_ID', 'siteId'), ('CO5240_STAFF_NO', 'workStaffNo')):
-        v = os.environ.get(env)
+    for env, field in (('CO5240_SITE_ID', 'siteId'),
+                       ('CO5240_SITE_NM', 'siteNm'),
+                       ('CO5240_STAFF_NO', 'workStaffNo')):
+        v = cfg(env)
         if v:
             body[field] = v
     return body
@@ -161,45 +184,44 @@ def hhmm(v) -> float | None:
 
 
 def classify(row: dict) -> dict:
-    """응답 1행 → 일일보고 근태유형. 체류시간 8H 기준으로 연차 구분."""
-    state = (pick(row, '근무상태', 'workStatus', 'wrkSttsNm') or '').strip()
-    inn, out = hhmm(pick(row, '출근시간', 'inTime', 'atdTm')), hhmm(pick(row, '퇴근시간', 'outTime', 'lvTm'))
-    stay = pick(row, '체류시간', 'stayTime', 'stayHr')
-    try:
-        stay = float(str(stay).replace(':', '.')) if stay not in (None, '') else None
-    except ValueError:
-        stay = None
-    if stay is None and inn is not None and out is not None:
-        stay = round(out - inn, 2)
+    """응답 1행 → 근태유형.
 
-    if '휴직' in state:
-        kind, used = '휴직', None
-    elif '출장' in state:
-        kind, used = '출장', None
-    elif '외근' in state:
-        kind, used = '외근', None
-    elif '무급' in state:
-        kind, used = '무급휴가', None
-    elif '휴무' in state:
-        kind, used = '휴무', None
-    elif '연차' in state or '휴가' in state:
+    5240이 확정한 응답 항목은 일곱 개다 (박준영 이사 2026-09-18 회신).
+        일자 · 사번 · 성명 · 구분 · 구분명 · 출근시간 · 퇴근시간
+        구분 1=휴가, 2=출장, 휴가·출장이 아니면 공란
+        구분명 휴가면 휴가명, 출장이면 출장지
+
+    체류시간과 근무상태는 응답에 없다. 체류시간은 퇴근−출근으로 만든다.
+    실제 응답 키 이름은 아직 못 봤으므로 흔한 표기를 함께 받는다.
+    """
+    gb = str(pick(row, '구분', 'gbn', 'gubun', 'workGb') or '').strip()
+    gbnm = (pick(row, '구분명', 'gbnNm', 'gubunNm', 'workGbNm') or '').strip()
+    inn = hhmm(pick(row, '출근시간', 'inTime', 'atdTm', 'startTm'))
+    out = hhmm(pick(row, '퇴근시간', 'outTime', 'lvTm', 'endTm'))
+    stay = round(out - inn, 2) if (inn is not None and out is not None) else None
+
+    if gb == '1' or '휴가' in gb:
         if stay is None or stay <= 0:
             kind, used = '연차(8H)', FULL_DAY_HOURS
         else:
-            kind, used = '연차(8H미만)', round(FULL_DAY_HOURS - stay, 2)
+            kind, used = '연차(8H미만)', round(max(FULL_DAY_HOURS - stay, 0), 2)
+        if gbnm and any(k in gbnm for k in ('무급', '병가', '경조', '공가')):
+            kind, used = gbnm, None
+    elif gb == '2' or '출장' in gb:
+        kind, used = '출장', None
     elif inn is None and out is None:
         kind, used = '출근기록누락', None
     else:
         kind, used = '정상출근', None
 
     ot = round(out - REGULAR_END.hour, 2) if (out is not None and out > REGULAR_END.hour) else 0.0
-    return {'사번': pick(row, '직원번호', 'staffNo', 'empNo'),
+    return {'사번': pick(row, '사번', '직원번호', 'staffNo', 'empNo'),
             '성명': pick(row, '성명', 'staffNm', 'empNm'),
             '조직': pick(row, '조직명', 'deptNm', 'orgNm'),
             '일자': pick(row, '일자', 'workYmd', 'staYmd'),
+            '구분': gb, '구분명': gbnm,
             '출근': inn, '퇴근': out, '체류시간': stay,
-            '근무상태': state, '근태유형': kind, '연차사용시간': used, '연장시간': ot,
-            '특이사항': pick(row, '특이사항', 'remark', 'etcCntn')}
+            '근태유형': kind, '연차사용시간': used, '연장시간': ot}
 
 
 TYPE_ORDER = ['정상출근', '연차(8H)', '연차(8H미만)', '휴무', '출장', '외근',
@@ -242,6 +264,66 @@ def build_report(day: dt.date) -> dict:
     }
 
 
+OT_RATE = 15500          # 「연장」 시트 헤더 시간단가. 실제 단가표가 오면 바꾼다.
+
+
+def build_ledger(frm: dt.date, to: dt.date) -> dict:
+    """수집한 날들을 인사 방 8-4 일일 마감 대장 형식으로 묶는다."""
+    days, missing = [], []
+    cur = frm
+    while cur <= to:
+        p = OUT_DIR / f'work_{ymd_int(cur)}.json'
+        w = '월화수목금토일'[cur.weekday()]
+        if not p.exists():
+            days.append({'일자': cur.isoformat(), '요일': w, '접수': False})
+            missing.append(cur.isoformat())
+            cur += dt.timedelta(days=1)
+            continue
+        payload = json.loads(p.read_text(encoding='utf-8'))
+        recs = [classify(r) for r in rows_of(payload.get('response', payload))]
+        by = {}
+        for r in recs:
+            by.setdefault(r['근태유형'], []).append(r)
+        ot = [r for r in recs if r['연장시간'] and r['연장시간'] > 0]
+        휴가 = [r for r in recs if r['근태유형'].startswith('연차') or r['구분'] == '1']
+        days.append({
+            '일자': cur.isoformat(), '요일': w, '접수': True,
+            '응답행수': len(recs),
+            '정상출근': len(by.get('정상출근', [])),
+            '휴가자수': len(휴가),
+            '휴가자': sorted(f"{r['성명']}({r['구분명'] or r['근태유형']})" for r in 휴가 if r['성명']),
+            '출장': len(by.get('출장', [])),
+            '출근기록누락': sorted(r['성명'] for r in by.get('출근기록누락', []) if r['성명']),
+            '근태유형별': [{'유형': t, '인원': len(v)} for t, v in sorted(by.items(), key=lambda x: -len(x[1]))],
+            '연장인원': len(ot),
+            '연장시간': round(sum(r['연장시간'] for r in ot), 2),
+            '연장근무비': round(sum(r['연장시간'] for r in ot) * OT_RATE),
+            '연장명단': [{'성명': r['성명'], '조직': r['조직'], '퇴근': r['퇴근'],
+                        '시간': r['연장시간'], '금액': round(r['연장시간'] * OT_RATE)}
+                       for r in sorted(ot, key=lambda x: -x['연장시간'])],
+        })
+        cur += dt.timedelta(days=1)
+
+    got = [d for d in days if d['접수']]
+    return {
+        '생성': dt.datetime.now().isoformat(timespec='seconds'),
+        '기간': {'시작': frm.isoformat(), '종료': to.isoformat(), '일수': len(days)},
+        '출처': '5240 근태 API (BATCH_IF_WORK) · 서비스영역ID %s · siteNm %s' % (cfg('CO5240_SID'), cfg('CO5240_SITE_NM')),
+        '일별': days,
+        '집계': {'접수': len(got), '미수집': len(missing),
+                '연장시간': round(sum(d['연장시간'] for d in got), 2),
+                '연장근무비': sum(d['연장근무비'] for d in got),
+                '휴가자연인원': sum(d['휴가자수'] for d in got),
+                '출근기록누락': sum(len(d['출근기록누락']) for d in got)},
+        '미수집일': missing,
+        '주의': [
+            '연장근무비는 퇴근시각 − 18:00 을 시간단가 %s원으로 곱한 추정입니다. 실제 지급은 급여대장 기준입니다.' % f'{OT_RATE:,}',
+            '5240 응답에 체류시간이 없어 퇴근−출근으로 계산했습니다.',
+            '외주 인원·외주비와 출장비 금액은 5240에 없습니다. 그 세 가지는 계속 수기입니다.',
+        ],
+    }
+
+
 # ── CLI ───────────────────────────────────────────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser(description='5240 근태 API 클라이언트')
@@ -265,6 +347,10 @@ def main() -> None:
 
     r = sub.add_parser('report', help='수집분 → 근태보고 표')
     r.add_argument('--date', required=True)
+
+    g = sub.add_parser('ledger', help='수집분 → 인사 방 8-4 일일 마감 대장 JSON')
+    g.add_argument('--from', dest='frm', required=True)
+    g.add_argument('--to', dest='to', required=True)
 
     a = ap.parse_args()
 
@@ -299,12 +385,12 @@ def main() -> None:
 
     if a.cmd == 'fetch':
         day = parse_date(a.date)
-        sid = 0 if a.dry_run and not os.environ.get('CO5240_SID') else require_sid()
+        sid = require_sid()
         payload = fetch_day(day, sid, dry=a.dry_run)
         if a.dry_run:
-            if not os.environ.get('CO5240_SID'):
-                payload['_경고'] = ('CO5240_SID 가 없어 서비스영역ID=0 으로 키를 계산했습니다. '
-                                  '실제 발급값을 넣으면 interfaceKey 가 달라집니다.')
+            payload['_설정'] = {'서비스영역ID': sid, 'siteNm': cfg('CO5240_SITE_NM'),
+                               'workStaffNo': cfg('CO5240_STAFF_NO'),
+                               '출처': '5240 박준영 이사 2026-09-28 회신'}
             print(json.dumps(payload, ensure_ascii=False, indent=1))
             return
         p = save(day, payload)
@@ -341,6 +427,23 @@ def main() -> None:
 
     if a.cmd == 'report':
         print(json.dumps(build_report(parse_date(a.date)), ensure_ascii=False, indent=1))
+        return
+
+    if a.cmd == 'ledger':
+        frm, to = parse_date(a.frm), parse_date(a.to)
+        led = build_ledger(frm, to)
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        out = OUT_DIR / f'ledger_{ymd_int(frm)}_{ymd_int(to)}.json'
+        out.write_text(json.dumps(led, ensure_ascii=False, indent=1), encoding='utf-8')
+        G = led['집계']
+        print(f"{out} 저장")
+        print(f"  기간 {frm} ~ {to} · {led['기간']['일수']}일")
+        print(f"  수집 {G['접수']}일 · 미수집 {G['미수집']}일")
+        print(f"  연장 {G['연장시간']}시간 · 추정 {G['연장근무비']:,}원 · 휴가 연인원 {G['휴가자연인원']}명")
+        if G['출근기록누락']:
+            print(f"  출근기록누락 {G['출근기록누락']}건 — 확인 필요")
+        if led['미수집일']:
+            print(f"  미수집일: {', '.join(led['미수집일'][:8])}{' …' if len(led['미수집일']) > 8 else ''}")
         return
 
 
