@@ -3235,6 +3235,118 @@
     return h;
   }
 
+
+  /* ================= 8-4. 일일 마감 대장 (3개월) ================= */
+  var vdgTab='대장';
+  function vDg(){
+    var L=D.dailyLedger;
+    if(!L) return head('8-4. 일일 마감 대장','자료가 아직 없습니다.',['part','미연결']);
+    var G=L.집계, P=L.기간;
+    var h=head('8-4. 일일 마감 대장 (3개월)',
+      '인사파트가 매일 올리는 보고를 하루 한 줄로 접어 '+P.일수+'일치를 한 화면에 놓았습니다. '+esc(L.상태),
+      ['part','접수 '+G.접수+'일']);
+    h+='<div class="kpi-row">'+
+      kpi('기간',P.시작.slice(5)+' ~ '+P.종료.slice(5),P.일수+'일 · 근무일 '+P.근무일+'일','lead')+
+      kpi('보고 접수',G.접수+'일','근무일 대비 '+pct(G.접수율),G.접수율<0.9?'bad':'')+
+      kpi('미접수 근무일',G.미접수근무일+'일','7·8·10월이 통째로 비어 있음','bad')+
+      kpi('접수분 합계',man(G.총합),'일평균 '+man(G.일평균))+
+      kpi('연장근무비',man(G.연장근무비),'접수분 '+G.접수+'일 기준')+
+      kpi('외주용역비',man(G.외주용역비),'접수분 '+G.접수+'일 기준','warn')+
+      '</div>';
+    var T=[['대장','① 일자별 대장'],['월별','② 월별 소계'],['양식','③ 받아야 할 칸'],['제안','④ 이 일을 없애는 법']];
+    h+='<div class="searchbar">'+T.map(function(t){
+      return '<button class="nav-item'+(vdgTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vdg="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vdgTab==='대장'){
+      var mx=maxOf(L.일별,function(r){return r.총합||0;});
+      h+=panel('일자별 ('+P.일수+'일)',
+        '「미접수」는 보고를 못 받은 날입니다. 금액이 0인 것이 아니라 모르는 것입니다.',
+        table([
+          {label:'일자',cls:'strong',render:function(r){return '<b class="num">'+esc(r.일자.slice(5))+'</b>';}},
+          {label:'요일',render:function(r){
+            var w=r.요일, c=(w==='토'||w==='일')?'var(--crit)':'var(--ink-2)';
+            return '<span style="color:'+c+'">'+w+'</span>';}},
+          {label:'휴무',render:function(r){return r.휴무?'<span class="sev 참고">'+esc(r.휴무)+'</span>':'';}},
+          {label:'상태',render:function(r){
+            if(r.접수) return '<span class="sev 참고">접수</span>';
+            return r.휴무?'<span class="muted">-</span>':'<span class="sev 치명">미접수</span>';}},
+          {label:'연장근무비',num:true,render:function(r){return r.접수?won(r.연장근무비):'<span class="muted">-</span>';}},
+          {label:'출장비',num:true,render:function(r){return r.접수?won(r.출장비):'<span class="muted">-</span>';}},
+          {label:'외주용역비',num:true,render:function(r){return r.접수?won(r.외주용역비):'<span class="muted">-</span>';}},
+          {label:'총합',num:true,cls:'strong',render:function(r){return r.접수?won(r.총합):'<span class="muted">-</span>';}},
+          {label:'',render:function(r){return r.접수?bar(r.총합,mx):'';}}
+        ], L.일별, '520px', function(r){
+          if(r.접수) return '';
+          return r.휴무?'':'stripe-치명'; }));
+      var S=L.상세보유;
+      h+='<div class="panel flat" style="border-color:var(--warn);background:var(--warn-soft)">'+
+        '<div style="font-size:12.5px"><b>이름·휴가자·근태는 하루치만 있습니다</b> — '+esc(S.설명)+' '+
+        '그날은 근태 '+S.근태+'개 유형, 외주 '+S.외주+'개 파트, 야근 '+S.야근+'명이 이름까지 들어와 있고 '+
+        '<b>8-3 일일 인사 보고</b>에서 볼 수 있습니다. 나머지 날은 금액 세 줄뿐입니다.</div></div>';
+    }
+
+    if(vdgTab==='월별'){
+      h+=panel('월별 소계','접수한 날만 더한 값입니다. 접수율이 낮은 달은 합계도 그만큼 적게 잡혀 있습니다.',
+        table([
+          {label:'월',cls:'strong',render:function(r){return '<b>'+esc(r.월)+'</b>';}},
+          {label:'일수',num:true,render:function(r){return r.일수+'일';}},
+          {label:'근무일',num:true,render:function(r){return r.근무일+'일';}},
+          {label:'접수',num:true,cls:'strong',render:function(r){
+            return r.접수?'<b>'+r.접수+'일</b>':'<span class="sev 치명">0일</span>';}},
+          {label:'접수율',num:true,render:function(r){
+            return r.근무일?pct(r.접수/r.근무일):'-';}},
+          {label:'연장근무비',num:true,render:function(r){return r.접수?won(r.연장근무비):'<span class="muted">-</span>';}},
+          {label:'출장비',num:true,render:function(r){return r.접수?won(r.출장비):'<span class="muted">-</span>';}},
+          {label:'외주용역비',num:true,render:function(r){return r.접수?won(r.외주용역비):'<span class="muted">-</span>';}},
+          {label:'총합',num:true,cls:'strong',render:function(r){return r.접수?won(r.총합):'<span class="muted">-</span>';}}
+        ], L.월별, null, function(r){ return r.접수?'':'stripe-치명'; }));
+      h+=note('※ 9월 접수가 23일인데 근무일이 20일인 것은, 9월 집계표에 주말 근무일(토요일 외주·연장)이 함께 들어 있기 때문입니다.');
+    }
+
+    if(vdgTab==='양식'){
+      h+=panel('한 줄에 들어갈 열 칸','이 칸으로 주시면 날짜축에 그대로 붙습니다. 지금은 금액 세 칸만 들어와 있습니다.',
+        table([
+          {label:'칸',cls:'strong',render:function(r){return '<b>'+esc(r.칸)+'</b>';}},
+          {label:'필요',render:function(r){
+            return '<span class="sev '+(r.필수==='필수'?'치명':'주의')+'">'+esc(r.필수)+'</span>';}},
+          {label:'설명',render:function(r){return '<span style="white-space:normal;display:inline-block;min-width:44ch">'+esc(r.설명)+'</span>';}}
+        ], L.필요칸));
+      h+=panel('어떻게 받을까','',
+        '<div class="steps">'+L.받는법.map(function(m){
+          return '<div class="step"'+(m.권장?' style="border-color:var(--accent)"':'')+'><div class="qn">'+m.순서+'</div><div>'+
+            '<h3>'+esc(m.방법)+(m.권장?' <span class="tag plan">권장</span>':'')+'</h3>'+
+            '<p>'+esc(m.내용)+'</p></div></div>';
+        }).join('')+'</div>',true);
+    }
+
+    if(vdgTab==='제안'){
+      var S=L.제안;
+      h+=panel(esc(S.제목),'',
+        '<div class="card" style="border-color:var(--accent)"><p style="margin:0;font-size:12.8px">'+esc(S.내용)+'</p>'+
+        '<p style="margin-top:9px;color:var(--warn)"><b>남은 것</b> — '+esc(S.남은것)+'</p></div>',true);
+      h+=panel('지금 손으로 하는 것과 자동이 되는 것','',
+        table([
+          {label:'항목',cls:'strong',render:function(r){return '<b>'+esc(r[0])+'</b>';}},
+          {label:'지금',render:function(r){return esc(r[1]);}},
+          {label:'5240 연결 후',render:function(r){
+            var auto=r[2].indexOf('자동')===0;
+            return '<span class="sev '+(auto?'참고':'주의')+'">'+esc(r[2])+'</span>';}}
+        ], [
+          ['정상출근 인원','화면 보고 세기','자동'],
+          ['휴가자 명단·유형','손으로 분류','자동'],
+          ['근태 특이(지각·조퇴·누락)','눈으로 대조','자동'],
+          ['야근 성명·시간','손으로 입력','자동 (퇴근시각에서 산출)'],
+          ['야근비 금액','손으로 계산','자동'],
+          ['출장비','손으로 입력','수기 유지 (금액은 영수증 기준)'],
+          ['외주 인원','손으로 입력','수기 유지'],
+          ['외주비','손으로 계산','단가표 등록 시 자동']
+        ]));
+    }
+    h+=note('※ '+L.한계.map(esc).join(' '));
+    return h;
+  }
+
   /* ================= 6-1. 다면평가 ================= */
   var vrvTab='개요';
   function vRV(){
@@ -4472,6 +4584,7 @@
     {id:'vcal',n:'8-1',t:'근태 달력 · 휴가계획',     g:'직원', f:vCal},
     {id:'vlv',n:'8-2',t:'휴직자 관리',              g:'직원', f:vLv},
     {id:'vdl',n:'8-3',t:'일일 인사 보고 · 5240',  g:'직원', f:vDaily},
+    {id:'vdg',n:'8-4',t:'일일 마감 대장 · 3개월',  g:'직원', f:vDg},
     {id:'v9', n:'9', t:'채용 · 퇴사 분석',          g:'직원', f:v9},
     {id:'vfor',n:'10',t:'외국인 급여대장',           g:'직원', f:vFor},
     {id:'vhm',n:'9-1',t:'인사 마스터 · 이직/휴직',   g:'직원', f:vHM},
@@ -4656,6 +4769,9 @@
         b.addEventListener('click',function(){ vcalM=b.getAttribute('data-vcm'); go('vcal'); });
       });
     }
+    if(id==='vdg') document.querySelectorAll('[data-vdg]').forEach(function(b){
+      b.addEventListener('click',function(){ vdgTab=b.getAttribute('data-vdg'); go('vdg'); });
+    });
     if(id==='vrp'){
       document.querySelectorAll('[data-rvs]').forEach(function(b){
         b.addEventListener('click',function(){ vrp.범위=b.getAttribute('data-rvs'); vrp.sel=null; go('vrp'); });
