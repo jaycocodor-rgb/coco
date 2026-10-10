@@ -5177,6 +5177,209 @@
     return h;
   }
 
+  /* ================= 0-2. 월간 인사 마감 ================= */
+  var vclM=null;
+  function clMonth(){
+    var C=D.closeDesk; if(!C) return null;
+    if(vclM){ var f=C.월별.filter(function(r){return r.월===vclM;})[0]; if(f) return f; }
+    /* 기본은 인원 숫자가 들어 있는 가장 최근 달 */
+    var k=C.월별.filter(function(r){return r.인원 && r.인원.기말!==null && r.인원.기말!==undefined;})[0];
+    return k||C.월별[0];
+  }
+  function clState(s){
+    return s==='확보'?'<span class="sev 참고">확보</span>'
+      :(s==='해당 없음'?'<span class="muted">해당 없음</span>':'<span class="sev 치명">없음</span>');
+  }
+  function vCl(){
+    var C=D.closeDesk;
+    if(!C) return head('0-2. 월간 인사 마감','자료가 아직 없습니다.',['part','미연결']);
+    var G=C.집계, r=clMonth(); vclM=r.월;
+    var P=r.인원||{}, M=r.돈||{};
+    var h=head('0-2. 월간 인사 마감 · 월별 조회',
+      '달을 고르면 그 달에 들어온 사람, 나간 사람, 휴직한 사람, 다친 사람, 나간 돈이 한 장에 나옵니다. '+esc(C.범위)+'.',
+      ['part','마감 '+Math.round(G.평균마감률*100)+'%']);
+    h+='<div class="kpi-row">'+
+      kpi('조회 기간',G.개월+'개월',G.첫월+' ~ '+G.끝월,'lead')+
+      kpi('평균 마감률',pct(G.평균마감률,0),'9개 항목 중 확보된 비율','warn')+
+      kpi('완전히 채운 달',G.완전한달+'개월','9개 항목이 다 있는 달','bad')+
+      kpi('누적 퇴사',cnt(G.총퇴사)+'명','인사명부 기준 — 연간 합이 맞습니다')+
+      kpi('퇴직사유 기재',G.사유기재+'건','퇴사 '+G.총퇴사+'명 중. 원인 분석이 안 됩니다','bad')+
+      kpi('보는 달',esc(r.월),'마감률 '+pct(r.마감률,0)+' · 미확보 '+r.미확보.length+'개')+
+      '</div>';
+
+    /* 달 고르기 */
+    var idx=C.월별.map(function(x){return x.월;}).indexOf(r.월);
+    h+='<div class="searchbar">'+
+      '<button class="co-btn" data-clmv="'+(idx+1<C.월별.length?C.월별[idx+1].월:'')+'"'+
+        (idx+1<C.월별.length?'':' disabled')+'>← 이전 달</button>'+
+      '<select id="clSel">'+C.월별.map(function(x){
+        return '<option value="'+x.월+'"'+(x.월===r.월?' selected':'')+'>'+x.월+
+          ' — 입사 '+(x.인원.입사===null||x.인원.입사===undefined?'-':x.인원.입사)+
+          ' · 퇴사 '+(x.인원.퇴사===null||x.인원.퇴사===undefined?'-':x.인원.퇴사)+
+          ' · 휴직 '+x.휴직자.length+' · 마감 '+Math.round(x.마감률*100)+'%</option>';
+      }).join('')+'</select>'+
+      '<button class="co-btn" data-clmv="'+(idx>0?C.월별[idx-1].월:'')+'"'+(idx>0?'':' disabled')+'>다음 달 →</button>'+
+      '</div>';
+
+    h+='<div class="kpi-row">'+
+      kpi(esc(r.월)+' 기초',(P.기초===null||P.기초===undefined)?'진행 중':cnt(P.기초)+'명','1일 아침 재적','lead')+
+      kpi('입사',(P.입사===null||P.입사===undefined)?'-':P.입사+'명',r.입사자.length+'명 명단 확인')+
+      kpi('퇴사',(P.퇴사===null||P.퇴사===undefined)?'-':P.퇴사+'명',r.퇴사자.length+'명 명단 확인',P.퇴사?'bad':'')+
+      kpi('기말',(P.기말===null||P.기말===undefined)?'진행 중':cnt(P.기말)+'명',
+          (P.순증===null||P.순증===undefined)?'':'순증 '+(P.순증>0?'+':'')+P.순증+'명')+
+      kpi('월 이직률',(P.이직률===null||P.이직률===undefined)?'-':pct(P.이직률,1),'퇴사 ÷ 평균인원',
+          (P.이직률||0)>0.08?'bad':'')+
+      kpi('휴직 · 산재',r.휴직자.length+' · '+r.산재.length+'명','기말 인원에 휴직자가 포함돼 있습니다',r.휴직자.length?'warn':'')+
+      '</div>';
+
+    /* 입사 · 퇴사 */
+    h+=panel('입사 — '+r.입사자.length+'명','인사명부와 급여·퇴직연금 대장에서 입사일이 이 달인 사람입니다.',
+      table([
+        {label:'성명',cls:'strong',render:function(x){return '<b>'+esc(x.성명)+'</b>';}},
+        {label:'소속',render:function(x){return esc(x.소속);}},
+        {label:'직위',render:function(x){return esc(x.직위);}},
+        {label:'입사일',render:function(x){return '<span class="num">'+esc(x.입사일)+'</span>';}},
+        {label:'고용형태',render:function(x){return x.구분==='미기재'?'<span class="muted">미기재</span>':esc(x.구분);}},
+        {label:'경비구분',render:function(x){return x.경비==='미기재'?'<span class="muted">-</span>':esc(x.경비);}}
+      ], r.입사자, '300px'));
+
+    h+=panel('퇴사 — '+r.퇴사자.length+'명',
+      '퇴직사유 칸이 거의 비어 있습니다. 이 칸만 채워도 왜 나가는지 말할 수 있습니다.',
+      table([
+        {label:'퇴직일',cls:'strong',render:function(x){return '<b class="num">'+esc(x.퇴직일)+'</b>';}},
+        {label:'성명',cls:'strong',render:function(x){return '<b>'+esc(x.성명)+'</b>';}},
+        {label:'소속',render:function(x){return esc(x.소속);}},
+        {label:'직위',render:function(x){return esc(x.직위);}},
+        {label:'입사일',render:function(x){return '<span class="num">'+esc(x.입사일)+'</span>';}},
+        {label:'근속',num:true,render:function(x){
+          if(x.근속년===null||x.근속년===undefined) return '-';
+          return (x.근속년<0.5?'<span style="color:var(--crit)">':'<span>')+x.근속년+'년</span>';}},
+        {label:'고용형태',render:function(x){return x.구분==='미기재'?'<span class="muted">미기재</span>':esc(x.구분);}},
+        {label:'퇴직사유',render:function(x){return x.사유==='미기재'?'<span class="sev 치명">미기재</span>':esc(x.사유);}}
+      ], r.퇴사자, '340px', function(x){ return (x.근속년!==null&&x.근속년<0.25)?'warn':''; }));
+
+    /* 휴직 · 산재 */
+    h+=panel('휴직 — '+r.휴직자.length+'명','휴직 기간이 이 달과 겹치는 사람입니다. 급여대장의 사유를 이름으로 붙였습니다.',
+      table([
+        {label:'성명',cls:'strong',render:function(x){return '<b>'+esc(x.성명)+'</b>';}},
+        {label:'법인',render:function(x){return esc(x.법인||'-');}},
+        {label:'소속',render:function(x){return esc(x.소속||'-');}},
+        {label:'사유',render:function(x){return x.사유==='미기재'?'<span class="sev 주의">미기재</span>':esc(x.사유);}},
+        {label:'휴직 시작',render:function(x){return '<span class="num">'+esc(x.휴직시작)+'</span>';}},
+        {label:'복직 예정',render:function(x){return x.복직예정==='미정'?'<span class="sev 치명">미정</span>':'<span class="num">'+esc(x.복직예정)+'</span>';}},
+        {label:'이 달까지',num:true,render:function(x){return x.이달경과월+'개월';}},
+        {label:'근속',num:true,render:function(x){return x.근속년수?x.근속년수+'년':'-';}}
+      ], r.휴직자, '300px'));
+
+    if(r.산재.length)
+      h+=panel('산재 요양 — '+r.산재.length+'명','요양 기간이 이 달과 겹치는 사람입니다.',
+        table([
+          {label:'성명',cls:'strong',render:function(x){return '<b>'+esc(x.성명)+'</b>';}},
+          {label:'재해일자',render:function(x){return '<span class="num">'+esc(x.재해일자)+'</span>';}},
+          {label:'요양 시작',render:function(x){return '<span class="num">'+esc(x.요양시작)+'</span>';}},
+          {label:'요양 종료',render:function(x){return esc(x.요양종료);}},
+          {label:'일수',num:true,render:function(x){return cnt(x.요양일수);}},
+          {label:'재해형태',render:function(x){return esc(x.재해형태||'-');}},
+          {label:'의료기관',render:function(x){return esc(x.의료기관||'-');}},
+          {label:'관할지사',render:function(x){return esc(x.관할지사||'-');}}
+        ], r.산재));
+
+    if(r.퇴직금.length)
+      h+=panel('퇴직금 지급 — '+r.퇴직금.length+'명 · '+won(M.퇴직금액),
+        '이 달 퇴사자에게 최종 정산한 금액입니다. 지급기한은 퇴직일부터 14일입니다.',
+        table([
+          {label:'성명',cls:'strong',render:function(x){return '<b>'+esc(x.성명)+'</b>';}},
+          {label:'법인',render:function(x){return esc(x.법인);}},
+          {label:'입사일',render:function(x){return '<span class="num">'+esc(x.입사일||'-')+'</span>';}},
+          {label:'퇴사일',render:function(x){return '<span class="num">'+esc(x.퇴사일)+'</span>';}},
+          {label:'근속',num:true,render:function(x){return x.근속년!==null?x.근속년+'년':'-';}},
+          {label:'총 지급',num:true,cls:'strong',render:function(x){return won(x.총지급);}},
+          {label:'지급기한',render:function(x){return '<span class="num">'+esc(x.지급기한||'-')+'</span>';}},
+          {label:'지연',render:function(x){return x.지연이자?'<span class="sev 치명">이자</span>':'';}}
+        ], r.퇴직금, null, function(x){ return x.지연이자?'warn':''; }));
+
+    /* 돈 */
+    var cat=M.급여상세, wht=M.원천세;
+    h+=panel('이 달 나간 돈','칸이 비어 있으면 그 자료를 아직 받지 못한 것입니다.',
+      cards([
+        card('인건비','<dl class="kv">'+
+          '<dt>월 인건비</dt><dd>'+(M.인건비?won(M.인건비):'<span class="muted">자료 없음</span>')+'</dd>'+
+          '<dt>1인 인건비</dt><dd>'+(P['1인인건비']?won(P['1인인건비']):'<span class="muted">-</span>')+'</dd>'+
+          '<dt>급여 항목 상세</dt><dd>'+(cat?won(cat.지급합계):'<span class="muted">급여대장 없음</span>')+'</dd>'+
+          '</dl>'+(cat?'<p style="margin:7px 0 0;font-size:11.5px;color:var(--ink-3)">'+
+            '기본급 '+man(cat.기본급)+' · 고정연장 '+man(cat.고정연장수당)+
+            ' · 추가연장 '+man(cat.추가연장수당)+'</p>':''),'손익·급여대장'),
+        card('퇴직급여','<dl class="kv">'+
+          '<dt>퇴직연금 불입</dt><dd>'+(M.불입인원?won(M.불입액):'<span class="muted">대장 없음</span>')+'</dd>'+
+          '<dt>불입 인원</dt><dd>'+(M.불입인원?M.불입인원+'명':'<span class="muted">-</span>')+'</dd>'+
+          '<dt>퇴직금 지급</dt><dd>'+(M.퇴직금건?won(M.퇴직금액)+' <span class="muted">'+M.퇴직금건+'명</span>':'<span class="muted">없음</span>')+'</dd>'+
+          '</dl>','DC 월납 대장'),
+        card('원천세','<dl class="kv">'+
+          '<dt>납부액</dt><dd>'+(wht?won(wht.납부액):'<span class="muted">신고 파일 없음</span>')+'</dd>'+
+          '<dt>소득세</dt><dd>'+(wht?won(wht.소득세):'<span class="muted">-</span>')+'</dd>'+
+          '<dt>지방소득세</dt><dd>'+(wht?won(wht.지방소득세):'<span class="muted">-</span>')+'</dd>'+
+          '<dt>대상 인원</dt><dd>'+(wht?wht.인원+'명 <span class="muted">'+wht.법인수+'개 법인</span>':'<span class="muted">-</span>')+'</dd>'+
+          '</dl>','신고·납부'),
+        card('일일보고 집계','<dl class="kv">'+
+          '<dt>접수</dt><dd>'+(M.보고근무일?(M.보고접수||0)+' / '+M.보고근무일+'일'+
+            ((M.보고접수||0)<M.보고근무일?' <span style="color:var(--crit)">부족</span>':''):'<span class="muted">수집 범위 밖</span>')+'</dd>'+
+          '<dt>연장근무비</dt><dd>'+(M.연장근무비?won(M.연장근무비):'<span class="muted">-</span>')+'</dd>'+
+          '<dt>출장비</dt><dd>'+(M.출장비?won(M.출장비):'<span class="muted">-</span>')+'</dd>'+
+          '<dt>외주용역비</dt><dd>'+(M.외주용역비?won(M.외주용역비):'<span class="muted">-</span>')+'</dd>'+
+          '</dl>','이윤정 일일보고')
+      ]),true);
+
+    /* 마감 점검 */
+    h+=panel(esc(r.월)+' 마감 점검 — '+r.확보수+' / '+r.분모+'개 확보'+
+        (r.해당없음?' <span style="font-weight:400;font-size:12px;color:var(--ink-3)">(해당 없음 '+r.해당없음+'개는 뺐습니다)</span>':''),
+      '「없음」은 자료를 못 받은 것이고 「해당 없음」은 그 달에 그 일이 없었던 것입니다. 둘을 섞으면 마감률이 거짓이 됩니다.',
+      table([
+        {label:'항목',cls:'strong',render:function(c){return '<b>'+esc(c.항목)+'</b>';}},
+        {label:'상태',render:function(c){return clState(c.상태);}},
+        {label:'내용',render:function(c){return esc(c.비고);}}
+      ], r.체크));
+
+    /* 전체 월 */
+    h+=panel('월별 마감 현황 — '+C.월별.length+'개월','줄을 눌러 그 달로 넘어갑니다.',
+      table([
+        {label:'월',cls:'strong',render:function(x){
+          return '<button class="nav-item" style="width:auto;border:1px solid '+(x.월===r.월?'var(--accent)':'var(--border)')+
+            ';border-radius:6px;font-size:11.5px;padding:3px 8px;font-family:\'IBM Plex Sans KR\'" data-clmv="'+x.월+'">'+x.월+'</button>';}},
+        {label:'기초',num:true,render:function(x){return x.인원.기초===null||x.인원.기초===undefined?'<span class="muted">-</span>':cnt(x.인원.기초);}},
+        {label:'입사',num:true,render:function(x){return x.인원.입사?cnt(x.인원.입사):'<span class="muted">0</span>';}},
+        {label:'퇴사',num:true,render:function(x){return x.인원.퇴사?'<span style="color:var(--crit)">'+x.인원.퇴사+'</span>':'<span class="muted">0</span>';}},
+        {label:'기말',num:true,render:function(x){return x.인원.기말===null||x.인원.기말===undefined?'<span class="muted">-</span>':cnt(x.인원.기말);}},
+        {label:'이직률',num:true,render:function(x){return x.인원.이직률===null||x.인원.이직률===undefined?'-':pct(x.인원.이직률,1);}},
+        {label:'휴직',num:true,render:function(x){return x.휴직자.length?'<span style="color:var(--warn)">'+x.휴직자.length+'</span>':'<span class="muted">0</span>';}},
+        {label:'산재',num:true,render:function(x){return x.산재.length?'<span style="color:var(--crit)">'+x.산재.length+'</span>':'<span class="muted">0</span>';}},
+        {label:'퇴직금',num:true,render:function(x){return x.돈.퇴직금건?x.돈.퇴직금건+'명':'<span class="muted">-</span>';}},
+        {label:'인건비',num:true,render:function(x){return x.돈.인건비?eok(x.돈.인건비):'<span class="muted">-</span>';}},
+        {label:'마감률',num:true,cls:'strong',render:function(x){
+          var p=Math.round(x.마감률*100);
+          return '<span style="color:'+(p>=70?'var(--accent)':(p>=50?'var(--warn)':'var(--crit)'))+'">'+p+'%</span>';}},
+        {label:'미확보',render:function(x){return x.미확보.length?'<span class="sub">'+esc(x.미확보.join(' · '))+'</span>':'<span style="color:var(--accent)">없음</span>';}}
+      ], C.월별, '520px', function(x){ return x.월===r.월?'warn':''; }));
+
+    /* 항목별 */
+    h+=panel('항목별로 몇 달이 채워졌는가','어느 자료가 구조적으로 비어 있는지 보입니다.',
+      table([
+        {label:'항목',cls:'strong',render:function(x){return '<b>'+esc(x.항목)+'</b>';}},
+        {label:'확보',num:true,render:function(x){return x['확보']+'개월';}},
+        {label:'없음',num:true,render:function(x){return x['없음']?'<span style="color:var(--crit)">'+x['없음']+'개월</span>':'<span class="muted">0</span>';}},
+        {label:'해당 없음',num:true,render:function(x){return x['해당없음']?x['해당없음']+'개월':'<span class="muted">0</span>';}},
+        {label:'',render:function(x){return bar(x['확보'],C.월별.length);}},
+        {label:'확보율',num:true,cls:'strong',render:function(x){
+          var dn=x['확보']+x['없음'];
+          return dn?pct(x['확보']/dn,0):'-';}}
+      ], C.항목별), true);
+
+    h+=panel('쓰는 법','',cards(C.쓰는법.map(function(t,i){
+      return card(null,'<p style="margin:0">'+esc(t)+'</p>','안내 '+(i+1)); })),true);
+    h+=note('※ '+C.한계.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(C.출처));
+    return h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -5235,6 +5438,7 @@
   var VIEWS=[
     {id:'vbr',n:'0', t:'인사 브리핑 · 현재 문제',   g:'요약', f:vBr},
     {id:'v0', n:'0-1',t:'인사 관리 요약',            g:'요약', f:v0},
+    {id:'vcl',n:'0-2',t:'월간 인사 마감 · 월별 조회', g:'요약', f:vCl},
     {id:'v1', n:'1', t:'부서별 인건비 현황',        g:'인건비 현황', f:v1},
     {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
@@ -5471,6 +5675,15 @@
       document.querySelectorAll('[data-vjc]').forEach(function(b){
         b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
       });
+    }
+    if(id==='vcl'){
+      document.querySelectorAll('[data-clmv]').forEach(function(b){
+        var v=b.getAttribute('data-clmv');
+        if(!v) return;
+        b.addEventListener('click',function(){ vclM=v; go('vcl'); });
+      });
+      var cs=document.getElementById('clSel');
+      if(cs) cs.addEventListener('change',function(){ vclM=cs.value; go('vcl'); });
     }
     if(id==='vmn') document.querySelectorAll('[data-vmn]').forEach(function(b){
       b.addEventListener('click',function(){ vmnY=b.getAttribute('data-vmn'); go('vmn'); });
