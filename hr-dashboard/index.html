@@ -5380,6 +5380,218 @@
     return h;
   }
 
+  /* ================= 5-3. 월별 급여 추이 ================= */
+  var vpmTab='개인', vpm={q:'', 법인:'전체', 소속:'전체', 정렬:'최근', sel:null};
+  function pmRole(r){ var v=String(r.직책||'').trim();
+    return (!v||v==='-'||/^\d+$/.test(v)||v==='미설정유형'||v==='직급없음')?'':v; }
+  function pmRows(){
+    var PM=D.payMon; if(!PM) return [];
+    var rows=noP(PM.사람).filter(function(r){
+      if(CO==='대만법인') return false;
+      if(CO!=='전체' && r.법인!==CO) return false;
+      if(vpm.법인!=='전체' && r.법인!==vpm.법인) return false;
+      if(vpm.소속!=='전체' && r.소속!==vpm.소속) return false;
+      if(vpm.q){ var q=vpm.q.toLowerCase();
+        if((r.성명+' '+(r.직원번호||'')+' '+(r.소속||'')).toLowerCase().indexOf(q)<0) return false; }
+      return true;
+    });
+    var O=vpm.정렬, val=function(r){ return r.온전최근||r.최근; };
+    rows.sort(function(a,b){
+      if(O==='최근') return val(b)-val(a);
+      if(O==='최근역') return val(a)-val(b);
+      if(O==='변화') return (b.변화율||-9)-(a.변화율||-9);
+      if(O==='변화역') return (a.변화율||9)-(b.변화율||9);
+      if(O==='개월') return b.개월수-a.개월수||val(b)-val(a);
+      if(O==='입사') return String(a.입사일||'9').localeCompare(String(b.입사일||'9'));
+      return String(a.성명).localeCompare(String(b.성명),'ko');
+    });
+    return rows;
+  }
+  /* 월별 꺾은선 — 한 사람의 급여 추이 */
+  function payLine(r){
+    var ms=D.payMon.월축, ks=Object.keys(r.월별).sort();
+    if(ks.length<2) return '<div class="foot-note">한 달치뿐이라 선을 그릴 수 없습니다.</div>';
+    var W=640, H=190, PL=58, PR=14, PT=16, PB=30;
+    var xs=ms.filter(function(m){return m>=ks[0]&&m<=ks[ks.length-1];});
+    var vals=ks.map(function(k){return r.월별[k];});
+    var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals);
+    if(hi===lo) hi=lo+1;
+    var span=ms.indexOf(ks[ks.length-1])-ms.indexOf(ks[0])||1;
+    var x0=ms.indexOf(ks[0]);
+    var X=function(m){ return PL+(ms.indexOf(m)-x0)/span*(W-PL-PR); };
+    var Y=function(v){ return PT+(1-(v-lo)/(hi-lo))*(H-PT-PB); };
+    var pts=ks.map(function(k){ return X(k)+','+Y(r.월별[k]); });
+    var g='';
+    /* 가로 눈금 3개 */
+    [lo,(lo+hi)/2,hi].forEach(function(v){
+      var y=Y(v);
+      g+='<line x1="'+PL+'" y1="'+y+'" x2="'+(W-PR)+'" y2="'+y+'" stroke="currentColor" stroke-opacity=".12"/>';
+      g+='<text x="'+(PL-6)+'" y="'+(y+3)+'" text-anchor="end" font-size="9.5" fill="currentColor" fill-opacity=".55" font-family="IBM Plex Mono,monospace">'+Math.round(v/10000)+'만</text>';
+    });
+    /* 연도 경계 세로선 */
+    ks.forEach(function(k){ if(k.slice(5)==='01'){ var x=X(k);
+      g+='<line x1="'+x+'" y1="'+PT+'" x2="'+x+'" y2="'+(H-PB)+'" stroke="currentColor" stroke-opacity=".18" stroke-dasharray="3 3"/>';
+      g+='<text x="'+x+'" y="'+(H-10)+'" text-anchor="middle" font-size="9.5" fill="currentColor" fill-opacity=".6">'+k.slice(0,4)+'</text>'; }});
+    g+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="var(--accent)" stroke-width="2"/>';
+    ks.forEach(function(k){ var part=r.부분월.indexOf(k)>=0;
+      g+='<circle cx="'+X(k)+'" cy="'+Y(r.월별[k])+'" r="'+(part?2:2.6)+'" fill="'+(part?'var(--surface)':'var(--accent)')+'" stroke="var(--accent)" stroke-width="1.3"/>'; });
+    g+='<text x="'+X(ks[0])+'" y="'+(Y(vals[0])-7)+'" text-anchor="middle" font-size="9.5" fill="currentColor" font-family="IBM Plex Mono,monospace">'+Math.round(vals[0]/10000)+'</text>';
+    g+='<text x="'+X(ks[ks.length-1])+'" y="'+(Y(vals[vals.length-1])-7)+'" text-anchor="end" font-size="9.5" fill="var(--accent)" font-family="IBM Plex Mono,monospace">'+Math.round(vals[vals.length-1]/10000)+'</text>';
+    return '<figure style="margin:0 0 10px"><div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:8px 10px">'+
+      '<svg role="img" aria-label="'+esc(r.성명)+' 월별 급여 추이" viewBox="0 0 '+W+' '+H+'" style="width:100%;min-width:560px;height:auto;color:var(--ink)">'+g+'</svg></div>'+
+      '<figcaption style="font-size:10.5px;color:var(--ink-3);padding:5px 2px 0">속이 빈 점은 입·퇴사·무급이 섞인 부분월입니다. 단위 만원.</figcaption></figure>';
+  }
+  function vPm(){
+    var PM=D.payMon;
+    if(!PM) return head('5-3. 월별 급여 추이','자료가 아직 없습니다.',['part','미연결']);
+    var G=PM.집계;
+    var h=head('5-3. 월별 급여 추이 · 입사 때부터',
+      '사람마다 받은 급여를 달 단위로 이어 봅니다. 가로가 월, 세로가 금액입니다. '+
+      esc(PM.범위.코코도르)+' / 팜 '+esc(PM.범위.코코도르팜)+'.',['part',G.첫월+' ~ '+G.끝월]);
+    h+='<div class="kpi-row">'+
+      kpi('대상',G.사람수+'명','임원 제외','lead')+
+      kpi('이어지는 기간',G.개월수+'개월',G.첫월+' ~ '+G.끝월)+
+      kpi('1인 평균 개월',G.평균개월+'개월','퇴사·입사로 짧은 사람 포함')+
+      kpi('24개월 이상',G['24개월이상']+'명','2년 넘게 추적되는 사람')+
+      kpi('총 급여 칸',cnt(G.총칸수)+'개','사람 × 월')+
+      kpi('항목별 상세',G.팜상세+'명','팜만 기본급·시간외까지','warn')+
+      '</div>';
+    var TB=[['개인','① 개인별 추이'],['표','② 전체 표'],['전사','③ 전사 월별']];
+    h+='<div class="searchbar">'+TB.map(function(t){
+      return '<button class="nav-item'+(vpmTab===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vpm="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vpmTab==='개인'){
+      var depts=Array.from(new Set(noP(PM.사람).filter(function(r){return CO==='전체'||r.법인===CO;}).map(function(r){return r.소속;}))).filter(function(x){return x&&x!=='-';}).sort();
+      var rows=pmRows();
+      h+='<div class="searchbar">'+
+        '<input id="pmq" type="search" placeholder="이름 · 사번 · 소속 검색" value="'+esc(vpm.q)+'">'+
+        '<select id="pmc"><option value="전체">법인 전체</option>'+['코코도르','코코도르팜'].map(function(x){
+          return '<option value="'+x+'"'+(vpm.법인===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select>'+
+        '<select id="pmd"><option value="전체">소속 전체</option>'+depts.map(function(x){
+          return '<option value="'+esc(x)+'"'+(vpm.소속===x?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select>'+
+        '<select id="pmo">'+[['최근','최근 급여 많은 순'],['최근역','적은 순'],['변화','상승률 높은 순'],
+          ['변화역','상승률 낮은 순'],['개월','추적 긴 순'],['입사','입사 빠른 순'],['이름','이름순']].map(function(o){
+          return '<option value="'+o[0]+'"'+(vpm.정렬===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'+
+        '</div>';
+      h+='<div class="foot-note" style="padding:0 2px 6px">'+rows.length+'명</div>';
+      h+='<div class="pick"><div class="person-list" id="pmList"></div><div id="pmCard"></div></div>';
+      h+=hideNote();
+    }
+
+    if(vpmTab==='표'){
+      var rows=pmRows();
+      h+=panel('월별 급여 요약 — '+rows.length+'명',
+        '한 줄이 한 사람입니다. 첫 급여와 최근 급여, 그 사이 상승률을 봅니다. 부분월은 상승률 계산에서 뺐습니다.',
+        table([
+          {label:'성명',cls:'strong',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+          {label:'법인',render:function(r){return esc(r.법인);}},
+          {label:'소속',render:function(r){return esc(r.소속||'-');}},
+          {label:'개월',num:true,render:function(r){return r.개월수;}},
+          {label:'첫 급여',num:true,render:function(r){return man(r.온전최초||r.최초)+'<br><span class="sub">'+esc(r.온전첫월||r.첫월)+'</span>';}},
+          {label:'최근 급여',num:true,cls:'strong',render:function(r){return man(r.온전최근||r.최근)+'<br><span class="sub">'+esc(r.온전끝월||r.끝월)+'</span>';}},
+          {label:'상승률',num:true,render:function(r){
+            if(r.변화율===null||r.변화율===undefined) return '<span class="muted">-</span>';
+            var p=r.변화율;
+            return '<span style="color:'+(p>0.001?'var(--accent)':(p<-0.001?'var(--crit)':'var(--ink-3)'))+'">'+(p>0?'+':'')+(p*100).toFixed(1)+'%</span>';}},
+          {label:'평균',num:true,render:function(r){return man(r.평균);}},
+          {label:'연환산',num:true,render:function(r){return won(r.연환산최근);}}
+        ], rows, '560px'));
+      h+=note('※ '+PM.기준설명.map(esc).join(' '));
+    }
+
+    if(vpmTab==='전사'){
+      var ts=PM.전사월별, mx=maxOf(ts,function(x){return x.급여계;});
+      h+=panel('전사 월별 급여 합계','사람별 급여를 그 달 기준으로 더한 값입니다. 두 법인 기준이 달라 추세만 보십시오.',
+        table([
+          {label:'월',cls:'strong',render:function(r){return '<b class="num">'+esc(r.월)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'급여 합계',num:true,cls:'strong',render:function(r){return eok(r.급여계);}},
+          {label:'',render:function(r){return bar(r.급여계,mx);}},
+          {label:'1인 평균',num:true,render:function(r){return man(r['1인평균']);}},
+          {label:'중위',num:true,render:function(r){return man(r.중위);}},
+          {label:'최저~최고',num:true,render:function(r){return '<span class="sub">'+man(r.최저)+' ~ '+man(r.최고)+'</span>';}}
+        ], ts, '520px'));
+      h+=panel('팜 금액 칸 — 달마다 어느 칸을 읽었는가','',
+        '<div style="padding:10px 14px;font-size:11.5px;color:var(--ink-2);line-height:1.8">'+
+        PM.팜금액칸.map(function(x){return esc(x.월)+' <b>'+esc(x.칸)+'</b>';}).join(' · ')+'</div>',true);
+    }
+
+    h+=note('※ '+PM.한계.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(PM.출처));
+    return h;
+  }
+  function renderPmList(){
+    var el=document.getElementById('pmList'); if(!el) return;
+    var rows=pmRows();
+    if(!rows.length){ el.innerHTML='<div style="padding:16px;font-size:12.5px;color:var(--ink-3)">조건에 맞는 사람이 없습니다.</div>'; vpm.sel=null; }
+    else{
+      if(!vpm.sel || !rows.some(function(r){return r.성명===vpm.sel;})) vpm.sel=rows[0].성명;
+      el.innerHTML=rows.map(function(r){
+        var p=r.변화율;
+        return '<button class="person-row" aria-selected="'+(r.성명===vpm.sel?'true':'false')+'" data-pmp="'+esc(r.성명)+'">'+
+          '<span><b>'+esc(r.성명)+'</b>'+
+          '<br><span class="sub">'+esc(r.법인)+' · '+esc(r.소속||'-')+' · '+r.개월수+'개월</span></span>'+
+          '<span class="num" style="font-size:11px;text-align:right">'+man(r.온전최근||r.최근)+
+          '<br><span class="sub"'+(p!==null&&p!==undefined?' style="color:'+(p>0.001?'var(--accent)':(p<-0.001?'var(--crit)':'var(--ink-3)'))+'"':'')+'>'+
+          (p===null||p===undefined?'-':(p>0?'+':'')+(p*100).toFixed(0)+'%')+'</span></span></button>';
+      }).join('');
+      el.querySelectorAll('[data-pmp]').forEach(function(b){
+        b.addEventListener('click',function(){ vpm.sel=b.getAttribute('data-pmp'); renderPmList(); });
+      });
+    }
+    renderPmCard();
+  }
+  function renderPmCard(){
+    var el=document.getElementById('pmCard'); if(!el) return;
+    var PM=D.payMon, r=PM.사람.filter(function(x){return x.성명===vpm.sel;})[0];
+    if(!r){ el.innerHTML='<div class="panel flat"><div class="panel-note">왼쪽에서 사람을 선택하세요.</div></div>'; return; }
+    var ks=Object.keys(r.월별).sort();
+    var h='<div class="panel flat"><div class="panel-head"><h2>'+esc(r.성명)+
+      (r.직원번호?' <span style="font-size:12px;color:var(--ink-3);font-family:\'IBM Plex Sans KR\'">'+esc(r.직원번호)+'</span>':'')+'</h2>'+
+      '<div class="panel-note">'+esc(r.법인)+' · '+esc(r.소속||'-')+(pmRole(r)?' · '+esc(pmRole(r)):'')+'</div></div>';
+    h+='<div class="kpi-row" style="margin-bottom:11px">'+
+      kpi('최근 급여',man(r.온전최근||r.최근),esc(r.온전끝월||r.끝월),'lead')+
+      kpi('첫 급여',man(r.온전최초||r.최초),esc(r.온전첫월||r.첫월))+
+      kpi('상승률',r.변화율===null||r.변화율===undefined?'-':((r.변화율>0?'+':'')+(r.변화율*100).toFixed(1)+'%'),
+          '첫 달 대비',r.변화율>0.001?'':(r.변화율<-0.001?'bad':''))+
+      kpi('연환산',won(r.연환산최근),'최근 급여 ×12')+
+      '</div>';
+    h+=payLine(r);
+    h+='<div class="cards" style="margin-bottom:11px">'+
+      '<div class="card"><h3>요약</h3><dl class="kv">'+
+        '<dt>추적 기간</dt><dd>'+r.개월수+'개월 ('+esc(r.첫월)+' ~ '+esc(r.끝월)+')</dd>'+
+        '<dt>입사일</dt><dd>'+esc(r.입사일||'-')+(r.입사일&&r.입사일>=PM.집계.첫월+'-01'?' <span class="muted">입사 때부터</span>':(r.입사일?' <span class="muted">입사는 자료 시작 전</span>':''))+'</dd>'+
+        '<dt>평균 / 중위</dt><dd>'+man(r.평균)+' / '+man(r.중위)+'</dd>'+
+        '<dt>최저 / 최고</dt><dd>'+man(r.최저)+' / '+man(r.최고)+'</dd>'+
+        '<dt>부분월</dt><dd>'+(r.부분월.length?r.부분월.length+'개월 <span class="muted">입·퇴사·무급</span>':'<span class="muted">없음</span>')+'</dd>'+
+        '<dt>기준</dt><dd><span style="font-size:11.5px">'+esc(r.기준)+'</span></dd>'+
+      '</dl></div>'+
+      (r.상세?'<div class="card"><h3>최근 달 항목별 <span class="muted">(팜)</span></h3>'+(function(){
+        var mk=Object.keys(r.상세).sort().pop(), dd=r.상세[mk];
+        return '<dl class="kv">'+Object.keys(dd).map(function(k){
+          return '<dt>'+esc(k)+'</dt><dd>'+won(dd[k])+'</dd>';}).join('')+'</dl>'+
+          '<p style="margin:6px 0 0;font-size:11px;color:var(--ink-3)">'+esc(mk)+' 기준</p>';})()+'</div>':
+       (r.지표?'<div class="card"><h3>퇴직금 산정 지표 <span class="muted">(코코도르)</span></h3><dl class="kv">'+
+        Object.keys(r.지표).map(function(k){ var v=r.지표[k];
+          return '<dt>'+esc(k)+'</dt><dd>'+(typeof v==='number'?(k.indexOf('임금')>=0||k.indexOf('금액')>=0||k.indexOf('추계')>=0?won(v):cnt(v)):esc(v))+'</dd>';}).join('')+
+        '</dl></div>':''))+
+      '</div>';
+    h+=panel('월별 급여 ('+ks.length+'개월)','금액이 적힌 달만 나옵니다. 빈 달은 입사 전·퇴사 후·무급입니다.',
+      table([
+        {label:'월',cls:'strong',render:function(m){return '<b class="num">'+m+'</b>'+(r.부분월.indexOf(m)>=0?' <span class="sev 주의">부분</span>':'');}},
+        {label:'급여',num:true,cls:'strong',render:function(m){return won(r.월별[m]);}},
+        {label:'',render:function(m){return bar(r.월별[m],r.최고);}},
+        {label:'전월 대비',num:true,render:function(m,i){
+          if(i===0) return '<span class="muted">-</span>';
+          var prev=r.월별[ks[i-1]], d=r.월별[m]-prev;
+          if(!d) return '<span class="muted">0</span>';
+          return '<span style="color:'+(d>0?'var(--accent)':'var(--crit)')+'">'+(d>0?'+':'')+man(d)+'</span>';}}
+      ], ks, '300px'),true);
+    h+='</div>';
+    el.innerHTML=h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -5448,6 +5660,7 @@
     {id:'v5', n:'5', t:'개인별 연봉 히스토리',       g:'직원', f:v5},
     {id:'vap',n:'5-1',t:'입사원서 · 이력 조회',      g:'직원', f:vAp},
     {id:'vrc',n:'5-2',t:'채용 · 면접',               g:'직원', f:vRc},
+    {id:'vpm',n:'5-3',t:'월별 급여 추이 · 입사~현재',  g:'직원', f:vPm},
     {id:'v6', n:'6', t:'급여 인상 현황 · 등급',      g:'직원', f:v6},
     {id:'vrv',n:'6-1',t:'다면평가 (360°) 설계',     g:'직원', f:vRV},
     {id:'vrp',n:'6-2',t:'다면평가 개인별 조회',    g:'직원', f:vRvP},
@@ -5688,6 +5901,18 @@
     if(id==='vmn') document.querySelectorAll('[data-vmn]').forEach(function(b){
       b.addEventListener('click',function(){ vmnY=b.getAttribute('data-vmn'); go('vmn'); });
     });
+    if(id==='vpm'){
+      document.querySelectorAll('[data-vpm]').forEach(function(b){
+        b.addEventListener('click',function(){ vpmTab=b.getAttribute('data-vpm'); go('vpm'); });
+      });
+      var pq=document.getElementById('pmq');
+      if(pq) pq.addEventListener('input',function(){ vpm.q=pq.value; vpm.sel=null; renderPmList(); });
+      var pc=document.getElementById('pmc'), pd=document.getElementById('pmd'), po=document.getElementById('pmo');
+      if(pc) pc.addEventListener('change',function(){ vpm.법인=pc.value; vpm.소속='전체'; vpm.sel=null; go('vpm'); });
+      if(pd) pd.addEventListener('change',function(){ vpm.소속=pd.value; vpm.sel=null; go('vpm'); });
+      if(po) po.addEventListener('change',function(){ vpm.정렬=po.value; go('vpm'); });
+      if(vpmTab==='개인') renderPmList();
+    }
     if(id==='vsv'){
       document.querySelectorAll('[data-vsv]').forEach(function(b){
         b.addEventListener('click',function(){ vsvTab=b.getAttribute('data-vsv'); go('vsv'); });
