@@ -5603,7 +5603,8 @@
     h+='<div class="panel flat" style="border-color:var(--accent);background:var(--accent-soft);margin-bottom:12px">'+
       '<div style="padding:13px 15px;font-size:13px;line-height:1.7"><b>한 줄 진단</b><br>'+esc(X.한줄요약)+'</div></div>';
     var TB=[['문제','① 6대 문제'],['인건비','② 인건비 관리'],['파이프라인','③ 인재 파이프라인'],
-            ['로드맵','④ 제도 로드맵'],['조직','⑤ 인사 조직 재설계'],['드라이브','⑥ 드라이브 자료']];
+            ['로드맵','④ 제도 로드맵'],['조직','⑤ 인사 조직 재설계'],['드라이브','⑥ 드라이브 자료'],
+            ['과제2020','⑦ 2020 10대 과제 대조'],['마스터','⑧ 인사 마스터(623명)']];
     h+='<div class="searchbar">'+TB.map(function(t){
       return '<button class="nav-item'+(vdgTab2===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vdg2="'+t[0]+'">'+t[1]+'</button>';
     }).join('')+'</div>';
@@ -5734,6 +5735,58 @@
           {label:'비고',render:function(r){return esc(r.비고);}}
         ], E.표));
       h+=note('※ '+esc(E.메모));
+    }
+
+    if(vdgTab2==='과제2020'){
+      var Q=X.과제2020;
+      h+='<div class="panel flat" style="border-color:var(--crit);background:var(--accent-soft);margin-bottom:11px">'+
+        '<div style="padding:13px 15px;font-size:12.8px;line-height:1.7"><b>'+esc(Q.출처)+'</b><br>'+esc(Q.머리글)+
+        '<p style="margin:8px 0 0;font-size:13px;color:var(--crit)"><b>'+esc(Q.한줄)+'</b></p></div></div>';
+      h+=panel('2020 계획 vs 2026 실제','목표·담당·KPI까지 있던 계획입니다. 지금 어디에 와 있는지 나란히 둡니다.',
+        table([
+          {label:'',cls:'strong',render:function(r){return '<b class="num">'+r.n+'</b>';}},
+          {label:'과제',cls:'strong',render:function(r){return '<b>'+esc(r.과제)+'</b>';}},
+          {label:'2020 목표',render:function(r){return esc(r['2020목표']);}},
+          {label:'2026 실제',render:function(r){return esc(r['2026실제']);}},
+          {label:'판정',render:function(r){var m={'미실행':'치명','대폭 미달':'치명','중단':'치명','역행':'치명','부분':'주의','확인 불가':'주의','실행':'참고'};
+            return '<span class="sev '+(m[r.판정]||'주의')+'">'+esc(r.판정)+'</span>';}},
+          {label:'0-3 로드맵',render:function(r){return '<span class="sub">'+esc(r.로드맵)+'</span>';}}
+        ], Q.표, '560px'));
+      h+=note('※ 이 대조는 2020년 계획서(인사파트 작성)와 이 방의 2026년 실측을 나란히 둔 것입니다. 판정은 제 의견입니다.');
+    }
+
+    if(vdgTab2==='마스터'){
+      var RT=X.인사마스터;
+      if(!RT||!RT.재직){ h+=note('인사 마스터 자료가 아직 없습니다.'); }
+      else {
+        h+='<div class="kpi-row">'+
+          kpi('명부 총원',cnt(RT.명부총원)+'명','5240 export · 입퇴사 전체','lead')+
+          kpi('재직',RT.재직+'명','그룹 9개 법인')+
+          kpi('필드 수',RT.필드수+'개','생년월일·연락처·이메일은 제외')+
+          kpi('승진 이력',RT.집계.승진이력자+'명','입사 후 승진한 사람')+
+          kpi('학력 기재율',pct(RT.집계.학력보유율,0),'대부분 미기재','bad')+
+          kpi('경력 채용',cnt((RT.채용구분.filter(function(x){return x.값==='03';})[0]||{}).인원||0)+'명','채용구분 03')+
+          '</div>';
+        var distTbl=function(title,arr,note2){ return panel(title,note2||'',
+          table([{label:'구분',cls:'strong',render:function(r){return '<b>'+esc(r.값)+'</b>';}},
+                 {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+                 {label:'',render:function(r){return bar(r.인원,maxOf(arr,function(x){return x.인원;}));}}], arr),true);};
+        h+='<div class="cards" style="margin-bottom:4px">'+
+          '<div class="card" style="padding:4px">'+distTbl('연령 분포',RT.연령분포,'생년월일을 구간으로만 환산')+'</div>'+
+          '<div class="card" style="padding:4px">'+distTbl('학력 분포',RT.학력분포)+'</div>'+
+          '<div class="card" style="padding:4px">'+distTbl('고용 형태',RT.직원구분)+'</div>'+
+          '<div class="card" style="padding:4px">'+distTbl('채용 구분',RT.채용구분,'01 공채 · 03 경력')+'</div>'+
+          '</div>';
+        h+=panel('승진 이력 — '+RT.승진이력.length+'명','입사일보다 뒤에 승진일자가 있는 재직자입니다. 중간관리자 육성의 출발점입니다.',
+          table([
+            {label:'승진일',cls:'strong',render:function(r){return '<b class="num">'+esc(r.승진일)+'</b>';}},
+            {label:'성명',cls:'strong',render:function(r){return '<b>'+esc(r.성명)+'</b>';}},
+            {label:'소속',render:function(r){return esc(r.소속||'-');}},
+            {label:'직위',render:function(r){return esc(r.직위||'-');}},
+            {label:'승진까지',render:function(r){return esc(r.승진연수||'-');}}
+          ], RT.승진이력, '340px'));
+        h+=note('※ '+(RT.한계||[]).map(esc).join(' '));
+      }
     }
 
     h+=note('※ '+X.한계.map(esc).join(' '));
