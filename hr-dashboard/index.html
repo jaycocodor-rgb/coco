@@ -459,14 +459,14 @@
   function jcPick(sub){ return EMPS.filter(function(e){return e.직군세부===sub;}); }
 
   /* ================= 개인별 목록 제외 =================
-     임원·본부장은 개인별 목록에서 빼되, 합계·평균·부서집계에는 그대로 포함한다.
+     임원·팀장·파트장(정지원 팀장, 정윤교 파트장)은 개인별 목록에서 빼되, 합계·평균·부서집계에는 그대로 포함한다.
      (빼면 인건비 총액이 틀어진다) */
   var HIDE_PERSON={'정연재':1,'이민정':1,'정지원':1,'정윤교':1};
   var HIDE_N=Object.keys(HIDE_PERSON).length;
   function hideP(r){ return !!(r && HIDE_PERSON[r.성명||r.대상]); }
   function noP(arr){ return (arr||[]).filter(function(r){ return !hideP(r); }); }
   function hideNote(n){
-    return note('※ 임원·본부장 '+HIDE_N+'명은 개인별 목록에서 제외했습니다'+
+    return note('※ 임원·팀장·파트장 '+HIDE_N+'명은 개인별 목록에서 제외했습니다'+
       (n?' (이 표에서 '+n+'행).':'.')+
       ' 인건비 합계·1인평균·부서별 집계에는 그대로 들어가 있어 다른 메뉴의 숫자와 어긋나지 않습니다.');
   }
@@ -2839,7 +2839,7 @@
       kpi('수당 항목',live.length+'개','계약 '+CONTRACT.filter(payHas).length+' · 변동 '+VARIABLE.filter(payHas).length,'lead')+
       kpi('수당 총액',man(totAll-totBase),'지급총액의 '+pct((totAll-totBase)/totAll))+
       kpi('최대 항목','고정연장수당',man(sumOf('고정연장수당'))+' · '+cntOf('고정연장수당')+'명')+
-      kpi('조회 인원',base.length+'명','임원·본부장 제외')+
+      kpi('조회 인원',base.length+'명','임원·팀장·파트장 제외')+
       kpi('식대',won(sumOf('식대')),'전원 미지급',sumOf('식대')?'':'bad')+
       '</div>';
     var T=[['부서','① 부서별'],['개인','② 개인별'],['항목','③ 항목별']];
@@ -5592,6 +5592,138 @@
     el.innerHTML=h;
   }
 
+  /* ================= 0-3. 인사 진단 · 제도 설계 ================= */
+  var vdgTab2='문제';
+  function vDiag(){
+    var X=D.hrDiag;
+    if(!X) return head('0-3. 인사 진단 · 제도 설계','자료가 아직 없습니다.',['part','미연결']);
+    var h=head('0-3. 인사 진단 · 제도 설계',
+      '대표님이 짚은 문제를 숫자로 받고, 무엇을 어떻게 바꿀지 설계합니다. '+
+      '숫자는 이 방 다른 메뉴에서 가져왔고, 해석과 설계는 제 의견입니다.',['part','종합 진단']);
+    h+='<div class="panel flat" style="border-color:var(--accent);background:var(--accent-soft);margin-bottom:12px">'+
+      '<div style="padding:13px 15px;font-size:13px;line-height:1.7"><b>한 줄 진단</b><br>'+esc(X.한줄요약)+'</div></div>';
+    var TB=[['문제','① 6대 문제'],['인건비','② 인건비 관리'],['파이프라인','③ 인재 파이프라인'],
+            ['로드맵','④ 제도 로드맵'],['조직','⑤ 인사 조직 재설계'],['드라이브','⑥ 드라이브 자료']];
+    h+='<div class="searchbar">'+TB.map(function(t){
+      return '<button class="nav-item'+(vdgTab2===t[0]?' active':'')+'" style="width:auto;border:1px solid var(--border);border-radius:7px" data-vdg2="'+t[0]+'">'+t[1]+'</button>';
+    }).join('')+'</div>';
+
+    if(vdgTab2==='문제'){
+      X.문제.forEach(function(p){
+        var body='<div style="padding:13px 15px">'+
+          '<p style="margin:0 0 10px;font-size:12.5px;color:var(--ink-2)"><b>'+esc(p.한줄)+'</b></p>'+
+          '<div class="kpi-row" style="margin-bottom:11px">'+
+          p.숫자.map(function(s,i){ return kpi(s[0],s[1],s[2],i===0?'bad':''); }).join('')+'</div>'+
+          '<p style="margin:0 0 9px;font-size:12.3px;line-height:1.65">'+esc(p.진단)+'</p>'+
+          '<div style="background:var(--accent-soft);border-radius:8px;padding:9px 12px;font-size:12.3px;line-height:1.6">'+
+          '<b style="color:var(--accent)">→ 해야 할 일</b> '+esc(p.해야할일)+'</div></div>';
+        h+=panel('<span class="num" style="color:var(--crit)">'+p.n+'.</span> '+esc(p.제목), '', body);
+      });
+    }
+
+    if(vdgTab2==='인건비'){
+      var G=D.groupTotal;
+      h+='<div class="kpi-row">'+
+        kpi('그룹 월 인건비',eok(G.총월인건비),'연환산 '+eok(G.총연환산),'lead')+
+        kpi('총 인원',G.총인원+'명','3개 법인')+
+        kpi('인사 월 마감률',pct(D.closeDesk.집계.평균마감률,0),'9항목 중 확보','bad')+
+        kpi('급여 상세 보유',D.payMon.집계.개월수+'개월','퇴직연금 대장서 역산','warn')+
+        '</div>';
+      h+=panel('법인별 인건비',' ',
+        table([
+          {label:'법인',cls:'strong',render:function(r){return '<b>'+esc(r.법인)+'</b>';}},
+          {label:'국가',render:function(r){return esc(r.국가);}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'월 인건비',num:true,cls:'strong',render:function(r){return won(r.월인건비);}},
+          {label:'',render:function(r){return bar(r.월인건비,maxOf(G.entities,function(x){return x.월인건비;}));}},
+          {label:'1인 월평균',num:true,render:function(r){return man(r.월인건비/r.인원);}}
+        ], G.entities));
+      h+=panel('기능별 인건비',' ',
+        table([
+          {label:'기능',cls:'strong',render:function(r){return '<b>'+esc(r.기능)+'</b>';}},
+          {label:'인원',num:true,render:function(r){return r.인원+'명';}},
+          {label:'인원 비중',num:true,render:function(r){return pct(r.인원비중,0);}},
+          {label:'인건비',num:true,cls:'strong',render:function(r){return eok(r.인건비);}},
+          {label:'',render:function(r){return bar(r.인건비,maxOf(D.byFunction,function(x){return x.인건비;}));}},
+          {label:'1인 평균',num:true,render:function(r){return man(r['1인평균']);}}
+        ], D.byFunction));
+      h+=note('※ 인건비를 인사가 1차로 받아 사람×부서×기능으로 묶는 틀이 3-1(월별 인원 변동)과 0-2(월간 마감)입니다. '+
+        '지금은 재무 결산 숫자로만 존재하고, 인사가 매달 들여다보는 구조가 아닙니다.');
+    }
+
+    if(vdgTab2==='파이프라인'){
+      h+='<div class="foot-note" style="padding:2px 2px 10px">해외 일등을 목표로, 사람을 유치 → 정착 → 중간관리자 → 경영자로 키우는 네 단계입니다.</div>';
+      X.파이프라인.forEach(function(s,i){
+        h+=panel(esc(s.단계),'',
+          '<div style="padding:12px 15px">'+
+          '<div class="cards" style="margin-bottom:10px">'+
+          '<div class="card" style="border-color:var(--crit)"><h3>지금</h3><p style="margin:0;font-size:12.3px">'+esc(s.지금)+'</p></div>'+
+          '<div class="card" style="border-color:var(--accent)"><h3>목표</h3><p style="margin:0;font-size:12.3px">'+esc(s.목표)+'</p></div>'+
+          '</div>'+
+          '<b style="font-size:12px;color:var(--ink-3)">수단</b><ul style="margin:6px 0 0;padding-left:18px;font-size:12.3px;line-height:1.75">'+
+          s.수단.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>');
+      });
+      X.기법.forEach(function(k){
+        h+=panel('기법 · '+esc(k.이름),esc(k.쓰는곳),
+          '<div style="padding:12px 15px;font-size:12.3px;line-height:1.7">'+esc(k.설명)+
+          '<p style="margin:7px 0 0;font-size:11px;color:var(--ink-3)">출처: '+esc(k.출처)+'</p></div>',true);
+      });
+    }
+
+    if(vdgTab2==='로드맵'){
+      h+=panel('제도 수정 로드맵','위에서부터 처리합니다. 즉시 항목은 벌칙·이직과 직결됩니다.',
+        table([
+          {label:'시기',cls:'strong',render:function(r){return '<b>'+esc(r.시기)+'</b>';}},
+          {label:'등급',render:function(r){return '<span class="sev '+r.급+'">'+r.급+'</span>';}},
+          {label:'과제',cls:'strong',render:function(r){return '<b>'+esc(r.과제)+'</b>';}},
+          {label:'내용',render:function(r){return esc(r.내용);}}
+        ], X.로드맵));
+      h+=note('※ 제도 수정에는 노무사 검토와 취업규칙 변경(근로자 과반 동의)이 필요한 항목이 있습니다.');
+    }
+
+    if(vdgTab2==='조직'){
+      var R=X.재배치;
+      h+='<div class="foot-note" style="padding:2px 2px 10px">'+
+        '인사가 작아서 못 하는 게 아니라, 작은 인력을 거래성 업무에 다 쓰고 있어서 못 합니다. 왼쪽을 넘기고 오른쪽으로 돌립니다.</div>';
+      h+='<div class="cards" style="margin-bottom:12px">'+
+        '<div class="card" style="border-color:var(--crit)"><h3>지금 — 거래성 업무에 매몰</h3>'+
+        table([{label:'업무',cls:'strong',render:function(r){return '<b>'+esc(r.업무)+'</b>';}},
+               {label:'넘길 곳',render:function(r){return esc(r.처리);}}], R.지금)+'</div>'+
+        '<div class="card" style="border-color:var(--accent)"><h3>바꿀 곳 — 전략 인사</h3>'+
+        table([{label:'업무',cls:'strong',render:function(r){return '<b>'+esc(r.업무)+'</b>';}},
+               {label:'효과',render:function(r){return esc(r.효과);}}], R.바꿀곳)+'</div>'+
+        '</div>';
+      h+=note('※ 경비 영수증·급여계산·4대보험 신고·근태 집계는 자동화·외주·5240으로 넘기고, 사람은 채용·온보딩·육성·인건비 분석으로 재배치합니다.');
+    }
+
+    if(vdgTab2==='드라이브'){
+      var DV=X.드라이브;
+      h+='<div class="panel flat" style="border-color:var(--warn);background:var(--accent-soft);margin-bottom:11px">'+
+        '<div style="padding:12px 14px;font-size:12.5px;line-height:1.7"><b>'+esc(DV.폴더)+'</b><br>'+esc(DV.판단)+'</div></div>';
+      h+=panel('폴더에서 찾은 것','전부 2022년에 멈춰 있습니다.',
+        table([
+          {label:'분류',cls:'strong',render:function(r){return '<b>'+esc(r.분류)+'</b>';}},
+          {label:'예',render:function(r){return esc(r.예);}},
+          {label:'시점',render:function(r){return '<span class="num">'+esc(r.시점)+'</span>';}},
+          {label:'상태',render:function(r){return esc(r.상태);}}
+        ], DV.찾은것));
+      var E=X.경조사규정;
+      h+=panel('경조사비 지급 규정 '+'<span style="font-weight:400;font-size:12px;color:var(--ink-3)">('+esc(E.출처)+')</span>',
+        '폴더에서 유일하게 자동 판독된 규정입니다. 지금도 유효한지 확인이 필요합니다.',
+        table([
+          {label:'사유',cls:'strong',render:function(r){return '<b>'+esc(r.사유)+'</b>';}},
+          {label:'경조금',num:true,render:function(r){return esc(r.경조금);}},
+          {label:'휴가',render:function(r){return esc(r.휴가);}},
+          {label:'비고',render:function(r){return esc(r.비고);}}
+        ], E.표));
+      h+=note('※ '+esc(E.메모));
+    }
+
+    h+=note('※ '+X.한계.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(X.출처));
+    return h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -5651,6 +5783,7 @@
     {id:'vbr',n:'0', t:'인사 브리핑 · 현재 문제',   g:'요약', f:vBr},
     {id:'v0', n:'0-1',t:'인사 관리 요약',            g:'요약', f:v0},
     {id:'vcl',n:'0-2',t:'월간 인사 마감 · 월별 조회', g:'요약', f:vCl},
+    {id:'vdx',n:'0-3',t:'인사 진단 · 제도 설계',       g:'요약', f:vDiag},
     {id:'v1', n:'1', t:'부서별 인건비 현황',        g:'인건비 현황', f:v1},
     {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
@@ -5889,6 +6022,9 @@
         b.addEventListener('click',function(){ vjcTab=b.getAttribute('data-vjc'); go('vjc'); });
       });
     }
+    if(id==='vdx') document.querySelectorAll('[data-vdg2]').forEach(function(b){
+      b.addEventListener('click',function(){ vdgTab2=b.getAttribute('data-vdg2'); go('vdx'); });
+    });
     if(id==='vcl'){
       document.querySelectorAll('[data-clmv]').forEach(function(b){
         var v=b.getAttribute('data-clmv');
