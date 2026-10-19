@@ -5794,6 +5794,46 @@
     return h;
   }
 
+  /* ================= 0-4. 인사 문서함 ================= */
+  function vDocHub(){
+    var X=D.docHub;
+    if(!X) return head('0-4. 인사 문서함','자료가 아직 없습니다.',['part','미연결']);
+    var G=X.집계;
+    var h=head('0-4. 인사 문서함',
+      '인사에서 꼭 챙겨야 할 문서를 분류별로 모았습니다. 새 문서가 생기면 계속 추가됩니다.',['part','지속 업데이트']);
+    h+='<div class="kpi-row">'+
+      kpi('등록 문서',G.문서수+'건',G.분류수+'개 분류','lead')+
+      kpi('필수 문서',G.필수+'건','가장 먼저 챙길 것','bad')+
+      kpi('방에 반영',G.방반영+'건','내용을 읽어 메뉴에 넣음')+
+      kpi('링크만',G.링크만+'건','hwp·zip·ppt — 원본 링크','warn')+
+      '</div>';
+    h+='<div class="panel flat" style="background:var(--accent-soft);margin-bottom:12px"><div style="padding:11px 14px;font-size:12px;line-height:1.7">'+
+      X.안내.map(function(t){return '· '+esc(t);}).join('<br>')+'</div></div>';
+
+    X.분류.forEach(function(c){
+      h+=panel(esc(c.군)+' <span style="font-weight:400;font-size:12px;color:var(--ink-3)">'+c.docs.length+'건</span>', esc(c.설명),
+        table([
+          {label:'문서',cls:'strong',render:function(r){return '<b>'+esc(r.제목)+'</b>'+(r.비고?'<br><span class="sub">'+esc(r.비고)+'</span>':'');}},
+          {label:'날짜',render:function(r){return '<span class="num">'+esc(r.날짜)+'</span>';}},
+          {label:'중요도',render:function(r){var m={'필수':'치명','중요':'주의','참고':'참고'};
+            return '<span class="sev '+(m[r.중요도]||'참고')+'">'+esc(r.중요도)+'</span>';}},
+          {label:'상태',render:function(r){return r.상태==='방에 반영'?'<span style="color:var(--accent)">●</span> '+esc(r.상태):'<span class="muted">'+esc(r.상태)+'</span>';}},
+          {label:'열기',render:function(r){return r.링크?'<a href="'+esc(r.링크)+'" target="_blank" rel="noopener">열기 →</a>':'<span class="muted">-</span>';}}
+        ], c.docs));
+    });
+
+    h+=panel('핵심 규정 요약','원본을 못 열어도 방 안에서 바로 볼 수 있게, 중요한 규정의 알맹이를 옮겨 둡니다.',
+      X.핵심요약.map(function(s){
+        return '<div style="padding:11px 15px;border-top:1px solid var(--border)"><b>'+esc(s.문서)+'</b>'+
+          '<ul style="margin:6px 0 0;padding-left:18px;font-size:12.3px;line-height:1.75">'+
+          s.항목.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>';
+      }).join(''), true);
+
+    h+=note('※ '+X.한계.map(esc).join(' '));
+    h+=note('자료 출처: '+esc(X.출처));
+    return h;
+  }
+
   function v18(){
     var h=head('데이터 출처 및 한계','모든 숫자가 어느 파일에서 나왔는지, 무엇이 확인되지 않았는지 밝힙니다.',['real','출처 공개']);
     var SRC=[
@@ -5854,6 +5894,7 @@
     {id:'v0', n:'0-1',t:'인사 관리 요약',            g:'요약', f:v0},
     {id:'vcl',n:'0-2',t:'월간 인사 마감 · 월별 조회', g:'요약', f:vCl},
     {id:'vdx',n:'0-3',t:'인사 진단 · 제도 설계',       g:'요약', f:vDiag},
+    {id:'vdh',n:'0-4',t:'인사 문서함',                g:'요약', f:vDocHub},
     {id:'v1', n:'1', t:'부서별 인건비 현황',        g:'인건비 현황', f:v1},
     {id:'vjc',n:'1-1',t:'인건비 분석 · 직군별',     g:'인건비 현황', f:vJC},
     {id:'v2', n:'2', t:'대만법인 인건비',           g:'인건비 현황', f:v2},
